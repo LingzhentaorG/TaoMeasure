@@ -1,0 +1,1883 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工程测量软件 v2.0</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="main.css">
+    <link rel="stylesheet" href="curve-design.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <header>
+            <div class="logo">
+                <i class="fas fa-compass"></i>
+                工程测量软件
+            </div>
+            <div class="header-info">
+                <span>v2.0 专业版</span>
+            </div>
+        </header>
+
+        <!-- 菜单栏 -->
+        <div class="menu-bar">
+            <div class="menu-item" onclick="fileHandler.showFileUploadDialog()">
+                <i class="fas fa-file-import"></i> 导入文件
+            </div>
+            <div class="menu-item" onclick="exportManager.showExportDialog()">
+                <i class="fas fa-file-export"></i> 导出结果
+            </div>
+            <div class="menu-item disabled">
+                <i class="fas fa-eye"></i> 视图
+            </div>
+            <div class="menu-item disabled">
+                <i class="fas fa-window-maximize"></i> 窗口
+            </div>
+            <div class="menu-item">
+                <i class="fas fa-question-circle"></i> 帮助
+            </div>
+        </div>
+
+        <!-- 主要内容区域 -->
+        <div class="main-content">
+            <!-- 侧边栏 -->
+            <div class="sidebar">
+                <!-- GPS高程转换模块 -->
+                <div class="module-group">
+                    <div class="module-group-title">
+                        <i class="fas fa-satellite"></i>
+                        GPS高程转换
+                    </div>
+                    <div class="sub-module-list">
+                        <button class="sub-module-btn active" data-module="gps" data-function="verticalTranslation">
+                            <i class="fas fa-arrows-alt-v"></i>
+                            垂直平移模型
+                        </button>
+                        <button class="sub-module-btn" data-module="gps" data-function="linearFitting">
+                            <i class="fas fa-chart-line"></i>
+                            线性基函数拟合
+                        </button>
+                        <button class="sub-module-btn" data-module="gps" data-function="surfaceFitting">
+                            <i class="fas fa-cube"></i>
+                            面基函数拟合
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 坐标转换模块 -->
+                <div class="module-group">
+                    <div class="module-group-title">
+                        <i class="fas fa-exchange-alt"></i>
+                        坐标转换
+                    </div>
+                    <div class="sub-module-list">
+                        <button class="sub-module-btn" data-module="coordinate" data-function="gauss_forward">
+                            <i class="fas fa-arrow-right"></i>
+                            高斯投影正算
+                        </button>
+                        <button class="sub-module-btn" data-module="coordinate" data-function="gauss_inverse">
+                            <i class="fas fa-arrow-left"></i>
+                            高斯投影反算
+                        </button>
+                        <button class="sub-module-btn" data-module="coordinate" data-function="xyz_to_blh">
+                            <i class="fas fa-cube"></i>
+                            XYZ→BLH转换
+                        </button>
+                        <button class="sub-module-btn" data-module="coordinate" data-function="blh_to_xyz">
+                            <i class="fas fa-cube"></i>
+                            BLH→XYZ转换
+                        </button>
+                        <button class="sub-module-btn" data-module="coordinate" data-function="zone_transform_1">
+                            <i class="fas fa-map"></i>
+                            换带与投影面变换1
+                        </button>
+                        <button class="sub-module-btn" data-module="coordinate" data-function="zone_transform_2">
+                            <i class="fas fa-map"></i>
+                            换带与投影面变换2
+                        </button>
+                        <button class="sub-module-btn" data-module="coordinate" data-function="four_param_forward">
+                            <i class="fas fa-calculator"></i>
+                            四参数转换正算
+                        </button>
+                        <button class="sub-module-btn" data-module="coordinate" data-function="seven_param">
+                            <i class="fas fa-calculator"></i>
+                            七参数转换
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 曲线测设模块 -->
+                <div class="module-group">
+                    <div class="module-group-title">
+                        <i class="fas fa-route"></i>
+                        曲线测设
+                    </div>
+                    <div class="sub-module-list">
+                        <button class="sub-module-btn" data-module="curve" data-function="transitionCurve">
+                            <i class="fas fa-bezier-curve"></i>
+                            对称基本型曲线测设
+                        </button>
+                        
+                    </div>
+                </div>
+            </div>
+
+            <!-- 内容区域 -->
+            <div class="content-area">
+                <!-- GPS高程转换模块工作区 -->
+                <div class="work-area" id="gps-work-area">
+                    <!-- 功能标题区域 -->
+                    <div class="function-header">
+                        <div class="function-title">
+                            <i class="fas fa-satellite"></i>
+                            <span id="currentFunctionTitle">GPS高程转换 - 垂直平移模型</span>
+                        </div>
+                        <div class="function-description" id="functionDescription">
+                            适用于小范围、高程异常变化平缓区域（如平原操场、厂房区）
+                        </div>
+                    </div>
+
+                    <!-- 计算区域 -->
+                    <div class="calculation-area">
+                        <!-- 表格容器 -->
+                        <div class="table-container">
+                            <!-- 工具栏 -->
+                            <div class="table-toolbar">
+                                <button class="tool-btn" id="settingsBtn"><i class="fas fa-cog"></i> 计算方案</button>
+                                <button class="tool-btn" id="importKnownBtn"><i class="fas fa-upload"></i> 导入已知点</button>
+                                <button class="tool-btn" id="importUnknownBtn"><i class="fas fa-upload"></i> 导入未知点</button>
+                                <button class="tool-btn primary" id="calculateBtn"><i class="fas fa-play"></i> 开始计算</button>
+                                <button class="tool-btn" id="tableSettingsBtn"><i class="fas fa-table"></i> 表格设置</button>
+                                <button class="tool-btn" id="exportBtn"><i class="fas fa-download"></i> 结果导出</button>
+                                <button class="tool-btn" id="switchToGraphBtn"><i class="fas fa-chart-area"></i> 切换到图形界面</button>
+                            </div>
+
+                            <!-- 选项卡 -->
+                            <div class="tabs">
+                                <div class="tab active" data-tab="known">已知点</div>
+                                <div class="tab" data-tab="unknown">未知点</div>
+                            </div>
+
+                            <!-- 表格内容 -->
+                            <div class="table-content">
+                                <div class="project-info">
+                                    <div class="info-row">
+                                        <label>工程名称: <input type="text" id="projectName" placeholder="请输入工程名称"></label>
+                                        <span class="page-info">第 <input type="number" id="currentPage" value="1" min="1"> 页 共 <span id="totalPages">1</span> 页</span>
+                                    </div>
+                                </div>
+                                <div class="table-panel active" id="knownPointsTable">
+                                    <div class="table-wrapper">
+                                        <table class="data-table" id="knownPointsDataTable">
+                                            <thead>
+                                                <tr>
+                                                    <th width="50"><input type="checkbox" id="selectAllKnown"></th>
+                                                    <th width="100">点名</th>
+                                                    <th width="120">纬度</th>
+                                                    <th width="120">经度</th>
+                                                    <th width="100">大地高(m)</th>
+                                                    <th width="100">高程异常(m)</th>
+                                                    <th width="100" class="calculated">正常高(m)</th>
+                                                    <th width="150">备注</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="knownPointsBody"></tbody>
+                                        </table>
+                                    </div>
+                                    <div class="table-actions">
+                                        <button class="action-btn" id="addKnownRowBtn"><i class="fas fa-plus"></i> 添加行</button>
+                                        <button class="action-btn" id="deleteKnownRowBtn"><i class="fas fa-trash"></i> 删除选中行</button>
+                                        <button class="action-btn" id="clearKnownBtn"><i class="fas fa-eraser"></i> 清空数据</button>
+                                    </div>
+                                </div>
+                                <div class="table-panel" id="unknownPointsTable">
+                                    <div class="table-wrapper">
+                                        <table class="data-table" id="unknownPointsDataTable">
+                                            <thead>
+                                                <tr>
+                                                    <th width="50"><input type="checkbox" id="selectAllUnknown"></th>
+                                                    <th width="100">点名</th>
+                                                    <th width="120">纬度</th>
+                                                    <th width="120">经度</th>
+                                                    <th width="100">大地高(m)</th>
+                                                    <th width="120" class="calculated">计算高程异常(m)</th>
+                                                    <th width="100" class="calculated">正常高(m)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="unknownPointsBody"></tbody>
+                                        </table>
+                                    </div>
+                                    <div class="table-actions">
+                                        <button class="action-btn" id="addUnknownRowBtn"><i class="fas fa-plus"></i> 添加行</button>
+                                        <button class="action-btn" id="deleteUnknownRowBtn"><i class="fas fa-trash"></i> 删除选中行</button>
+                                        <button class="action-btn" id="clearUnknownBtn"><i class="fas fa-eraser"></i> 清空数据</button>
+                                    </div>
+                                </div>
+                                <div class="responsibility-info">
+                                    <label>计算: <input type="text" id="calculator" placeholder="计算员"></label>
+                                    <label>复核: <input type="text" id="checker" placeholder="复核员"></label>
+                                    <label>日期: <input type="date" id="calcDate"></label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="canvas-container">
+                            <div class="canvas-toolbar">
+                                <button class="canvas-btn" id="zoomInBtn"><i class="fas fa-search-plus"></i></button>
+                                <button class="canvas-btn" id="zoomOutBtn"><i class="fas fa-search-minus"></i></button>
+                                <button class="canvas-btn" id="fitBtn"><i class="fas fa-expand-arrows-alt"></i></button>
+                                <button class="canvas-btn" id="resetViewBtn"><i class="fas fa-undo"></i></button>
+                                <button class="canvas-btn" id="measureDistBtn"><i class="fas fa-ruler"></i></button>
+                                <button class="canvas-btn" id="measureAngleBtn"><i class="fas fa-drafting-compass"></i></button>
+                                <button class="canvas-btn" id="annotateBtn"><i class="fas fa-font"></i></button>
+                                <button class="canvas-btn" id="saveCanvasBtn"><i class="fas fa-save"></i></button>
+                            </div>
+                            <div class="canvas-content">
+                                <canvas id="mainCanvas" class="canvas-canvas" width="800" height="600"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 坐标转换工作区域 -->
+                <div class="work-area" id="coordinate-work-area" style="display: none;">
+                    <div class="content-header">
+                        <h2 id="coordinate-function-title">坐标转换</h2>
+                        <div class="header-tools">
+                        </div>
+                    </div>
+                    
+                    <!-- 默认提示信息 -->
+                    <div id="coordinate-default-content" class="function-content">
+                         <div class="placeholder-content">
+                            <i class="fas fa-drafting-compass"></i>
+                            <p>请从左侧选择一个具体的转换功能，选择后将在此处显示对应的操作界面。</p>
+                        </div>
+                    </div>
+
+                    <!-- 高斯投影正算 -->
+                    <div id="gauss_forward-content" class="function-content module-container" style="display: none;">
+                        <div class="module-header">
+                            <h3 class="module-title"><i class="fas fa-arrow-right"></i> 高斯投影正算(BL → xy)</h3>
+                            <div class="module-controls">
+                                <button class="tool-btn" data-action="import-data"><i class="fas fa-file-import"></i> 导入数据</button>
+                                <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
+                                <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
+                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
+                                <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
+                            </div>
+                        </div>
+                        <div class="content-area">
+                            <div class="table-container">
+                                <div class="project-info">
+                                    <span>工程名称：<input type="text" class="project-name-input module-input" value="未命名工程"></span>
+                                </div>
+                                
+                                <!-- 计算方案参数显示 -->
+                                <div class="calc-params">
+                                    <div class="calc-params-content">
+                                        <span><strong>坐标系:</strong> <span id="current-ellipsoid">西安80坐标系</span></span>
+                                        <span><strong>长半轴(m):</strong> <span id="current-semi-major">6378137</span></span>
+                                        <span><strong>扁率分母1/:</strong> <span id="current-flattening">298.257222101</span></span>
+                                        <span><strong>Y坐标500KM:</strong> <input type="checkbox" id="current-500km" checked disabled> <span id="current-meridian-method">椭球膨胀方式</span></span>
+                                        <span><strong>测区纬度:</strong> <span id="current-zone-lat">0</span></span>
+                                        <span><strong>中央子午线(DMS):</strong> <span id="current-central-meridian">114</span></span>
+                                        <span><strong>投影面大地高(m):</strong> <span id="current-projection-height">0</span></span>
+                                    </div>
+                                </div>
+                                
+                                <table class="module-table">
+                                    <thead>
+                                        <tr>
+                                            <th><input type="checkbox" id="gaussSelectAll"></th>
+                                            <th>点名</th>
+                                            <th>纬度(°′″)</th>
+                                            <th>经度(°′″)</th>
+                                            <th>x(m)</th>
+                                            <th>y(m)</th>
+                                            <th>备注</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="gaussForwardTableBody">
+                                    </tbody>
+                                </table>
+                                <div class="table-controls">
+                                    <button class="tool-btn" id="gaussAddRowBtn"><i class="fas fa-plus"></i> 添加行</button>
+                                    <button class="tool-btn" id="gaussDeleteRowBtn"><i class="fas fa-minus"></i> 删除行</button>
+                                    <button class="tool-btn" id="gaussClearBtn"><i class="fas fa-trash"></i> 清空</button>
+                                </div>
+                                <div class="module-footer">
+                                    <div class="module-footer-left">
+                                        <span>计算：<input type="text" class="module-input" placeholder="计算人"></span>
+                                        <span>复核：<input type="text" class="module-input" placeholder="复核人"></span>
+                                        <span>日期：<input type="date" class="module-input"></span>
+                                    </div>
+                                    <div class="module-footer-right">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 高斯投影反算 -->
+                    <div id="gauss_inverse-content" class="function-content module-container" style="display: none;">
+                        <div class="module-header">
+                            <h3 class="module-title"><i class="fas fa-arrow-left"></i> 高斯投影反算(xy → BL)</h3>
+                            <div class="module-controls">
+                                <button class="tool-btn" data-action="import-data"><i class="fas fa-file-import"></i> 导入数据</button>
+                                <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
+                                <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
+                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
+                                <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
+                            </div>
+                        </div>
+                        <div class="content-area">
+                            <div class="table-container">
+                                <div class="project-info">
+                                    <span>工程名称：<input type="text" class="project-name-input module-input" value="未命名工程"></span>
+                                </div>
+                                
+                                <!-- 计算方案参数显示 -->
+                                <div class="calc-params">
+                                    <div class="calc-params-content">
+                                        <span><strong>坐标系:</strong> <span id="gauss-inverse-ellipsoid-display">西安80坐标系</span></span>
+                                        <span><strong>长半轴(m):</strong> <span id="gauss-inverse-semi-major-display">6378137</span></span>
+                                        <span><strong>扁率分母1/:</strong> <span id="gauss-inverse-flattening-display">298.257222101</span></span>
+                                        <span><strong>Y坐标500KM:</strong> <input type="checkbox" id="gauss-inverse-500km" checked disabled> <span id="current-meridian-method">椭球膨胀方式</span></span>
+                                        <span><strong>测区纬度:</strong> <span id="gauss-inverse-zone-lat">0</span></span>
+                                        <span><strong>中央子午线(DMS):</strong> <span id="gauss-inverse-central-meridian-display">114</span></span>
+                                        <span><strong>投影面大地高(m):</strong> <span id="gauss-inverse-projection-height-display">0</span></span>
+                                    </div>
+                                </div>
+                                
+                                <table class="module-table">
+                                    <thead>
+                                        <tr>
+                                            <th><input type="checkbox" id="gaussInverseSelectAll"></th>
+                                            <th>点名</th>
+                                            <th>x(m)</th>
+                                            <th>y(m)</th>
+                                            <th>纬度(°′″)</th>
+                                            <th>经度(°′″)</th>
+                                            <th>备注</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="gauss_inverse-table-body">
+                                    </tbody>
+                                </table>
+                                <div class="table-controls">
+                                    <button class="tool-btn" id="gaussInverseAddRowBtn"><i class="fas fa-plus"></i> 添加行</button>
+                                    <button class="tool-btn" id="gaussInverseDeleteRowBtn"><i class="fas fa-minus"></i> 删除行</button>
+                                    <button class="tool-btn" id="gaussInverseClearBtn"><i class="fas fa-trash"></i> 清空</button>
+                                </div>
+                                <div class="module-footer">
+                                    <div class="module-footer-left">
+                                        <span>计算：<input type="text" class="module-input" placeholder="计算人"></span>
+                                        <span>复核：<input type="text" class="module-input" placeholder="复核人"></span>
+                                        <span>日期：<input type="date" class="module-input"></span>
+                                    </div>
+                                    <div class="module-footer-right">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- XYZ → BLH -->
+                    <div id="xyz_to_blh-content" class="function-content module-container" style="display: none;">
+                        <div class="module-header">
+                            <h3 class="module-title"><i class="fas fa-globe"></i> 空间直角坐标转大地坐标(XYZ → BLH)</h3>
+                            <div class="module-controls">
+                                <button class="tool-btn" data-action="import-data"><i class="fas fa-file-import"></i> 导入数据</button>
+                                <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
+                                <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
+                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
+                                <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
+                            </div>
+                        </div>
+                        <div class="content-area">
+                            <div class="table-container">
+                                <div class="project-info">
+                                    <span>工程名称：<input type="text" class="project-name-input module-input" value="未命名工程"></span>
+                                    <span>第 <span class="page-number">1</span> 页 / 共 <span class="total-pages">1</span> 页</span>
+                                </div>
+                                <!-- 计算方案参数显示 -->
+                                <div class="calc-params">
+                                    <div class="calc-params-content">
+                                        <span><strong>坐标系:</strong> <span id="xyz-to-blh-ellipsoid">CGCS2000</span></span>
+                                        <span><strong>长半轴(m):</strong> <span id="xyz-to-blh-semi-major">6378137</span></span>
+                                        <span><strong>扁率分母1/:</strong> <span id="xyz-to-blh-flattening">298.257222101</span></span>
+                                        <span><strong>坐标精度:</strong> <span id="xyz-to-blh-coord-decimals">6</span> 位小数</span>
+                                    </div>
+                                </div>
+                                
+                                <table class="module-table">
+                                    <thead>
+                                        <tr>
+                                            <th><input type="checkbox" id="xyzToBLHSelectAll"></th>
+                                            <th>点名</th>
+                                            <th>X(m)</th>
+                                            <th>Y(m)</th>
+                                            <th>Z(m)</th>
+                                            <th>纬度(°′″)</th>
+                                            <th>经度(°′″)</th>
+                                            <th>大地高(m)</th>
+                                            <th>备注</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="xyz_to_blh-table-body">
+                                    </tbody>
+                                </table>
+                                <div class="table-controls">
+                                    <button class="btn btn-sm btn-secondary" id="xyzToBLHAddRowBtn"><i class="fas fa-plus"></i> 添加行</button>
+                                    <button class="btn btn-sm btn-secondary" id="xyzToBLHDeleteRowBtn"><i class="fas fa-minus"></i> 删除行</button>
+                                    <button class="btn btn-sm btn-secondary" id="xyzToBLHClearBtn"><i class="fas fa-trash"></i> 清空</button>
+                                </div>
+                                <div class="module-footer">
+                                    <div class="module-footer-left">
+                                        <span>计算：<input type="text" class="form-input" placeholder="计算人"></span>
+                                        <span>复核：<input type="text" class="form-input" placeholder="复核人"></span>
+                                        <span>日期：<input type="date" class="form-input"></span>
+                                    </div>
+                                    <div class="module-footer-right">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BLH → XYZ -->
+                    <div id="blh_to_xyz-content" class="function-content module-container" style="display: none;">
+                        <div class="module-header">
+                            <h3 class="module-title"><i class="fas fa-globe"></i> 大地坐标转空间直角坐标(BLH → XYZ)</h3>
+                            <div class="module-controls">
+                                <button class="tool-btn" data-action="import-data"><i class="fas fa-file-import"></i> 导入数据</button>
+                                <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
+                                <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
+                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
+                                <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
+                            </div>
+                        </div>
+                        <div class="content-area">
+                            <div class="table-container">
+                                <div class="project-info">
+                                    <span>工程名称：<input type="text" class="project-name-input module-input" value="未命名工程"></span>
+                                    <span>第 <span class="page-number">1</span> 页 / 共 <span class="total-pages">1</span> 页</span>
+                                </div>
+                                
+                                <!-- 计算方案参数显示 -->
+                                <div class="calc-params">
+                                    <div class="calc-params-content">
+                                        <span><strong>坐标系:</strong> <span id="blh-to-xyz-ellipsoid">CGCS2000</span></span>
+                                        <span><strong>长半轴(m):</strong> <span id="blh-to-xyz-semi-major">6378137</span></span>
+                                        <span><strong>扁率分母1/:</strong> <span id="blh-to-xyz-flattening">298.257222101</span></span>
+                                        <span><strong>坐标精度:</strong> <span id="blh-to-xyz-coord-decimals">3</span> 位小数</span>
+                                    </div>
+                                </div>
+                                
+                                <table class="module-table">
+                                    <thead>
+                                        <tr>
+                                            <th><input type="checkbox" id="blhToXYZSelectAll"></th>
+                                            <th>点名</th>
+                                            <th>纬度(°′″)</th>
+                                            <th>经度(°′″)</th>
+                                            <th>大地高(m)</th>
+                                            <th>X(m)</th>
+                                            <th>Y(m)</th>
+                                            <th>Z(m)</th>
+                                            <th>备注</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="blh_to_xyz-table-body">
+                                    </tbody>
+                                </table>
+                                <div class="table-controls">
+                                    <button class="btn btn-sm btn-secondary" id="blhToXYZAddRowBtn"><i class="fas fa-plus"></i> 添加行</button>
+                                    <button class="btn btn-sm btn-secondary" id="blhToXYZDeleteRowBtn"><i class="fas fa-minus"></i> 删除行</button>
+                                    <button class="btn btn-sm btn-secondary" id="blhToXYZClearBtn"><i class="fas fa-trash"></i> 清空</button>
+                                </div>
+                                <div class="module-footer">
+                                    <div class="module-footer-left">
+                                        <span>计算：<input type="text" class="form-input" placeholder="计算人"></span>
+                                        <span>复核：<input type="text" class="form-input" placeholder="复核人"></span>
+                                        <span>日期：<input type="date" class="form-input"></span>
+                                    </div>
+                                    <div class="module-footer-right">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 换带与投影面变换1 -->
+                    <div id="zone_transform_1-content" class="function-content module-container" style="display: none;">
+                        <div class="module-header">
+                            <h3 class="module-title"><i class="fas fa-exchange-alt"></i> 换带与投影面变换1(xy → xy)</h3>
+                            <div class="module-controls">
+                                <button class="tool-btn" data-action="import-data"><i class="fas fa-file-import"></i> 导入数据</button>
+                                <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
+                                <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
+                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
+                                <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
+                            </div>
+                        </div>
+                        <div class="content-area">
+                            <div class="table-container">
+                                <div class="project-info">
+                                    <span>工程名称：<input type="text" class="project-name-input module-input" value="未命名工程"></span>
+                                </div>
+                                <table class="module-table">
+                                    <thead>
+                                        <tr>
+                                            <th rowspan="2" colspan="1">选框</th>
+                                            <th rowspan="2" colspan="1">点名</th>
+                                            <th colspan="2">换带前坐标</th>
+                                            <th colspan="2">换带后坐标</th>
+                                            <th rowspan="2" colspan="1">备注</th>
+                                        </tr>
+                                        <tr>
+                                            <th>x(m)</th>
+                                            <th>y(m)</th>
+                                            <th>x(m)</th>
+                                            <th>y(m)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="zone_transform_1-table-body">
+                                    </tbody>
+                                </table>
+                                <div class="module-footer">
+                                    <div class="module-footer-left">
+                                        <span>计算：<input type="text" class="form-input" placeholder="计算人"></span>
+                                        <span>复核：<input type="text" class="form-input" placeholder="复核人"></span>
+                                        <span>日期：<input type="date" class="form-input"></span>
+                                    </div>
+                                    <div class="module-footer-right">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 换带与投影面变换2 -->
+                    <div id="zone_transform_2-content" class="function-content module-container" style="display: none;">
+                        <div class="module-header">
+                            <h3 class="module-title"><i class="fas fa-exchange-alt"></i> 换带与投影面变换2(xyH → xyH)</h3>
+                            <div class="module-controls">
+                                <button class="tool-btn" data-action="import-data"><i class="fas fa-file-import"></i> 导入数据</button>
+                                <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
+                                <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
+                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
+                                <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
+                            </div>
+                        </div>
+                        <div class="content-area">
+                            <div class="table-container">
+                                <div class="project-info">
+                                    <span>工程名称：<input type="text" class="project-name-input module-input" value="未命名工程"></span>
+                                </div>
+                                <table class="module-table">
+                                    <thead>
+                                        <tr>
+                                            <th rowspan="2" colspan="1">选框</th>
+                                            <th rowspan="2" colspan="1">点名</th>
+                                            <th colspan="3">换带前坐标</th>
+                                            <th colspan="3">换带后坐标</th>
+                                            <th rowspan="2" colspan="1">备注</th>
+                                        </tr>
+                                        <tr>
+                                            <th>x(m)</th>
+                                            <th>y(m)</th>
+                                            <th>大地高(m)</th>
+                                            <th>x(m)</th>
+                                            <th>y(m)</th>
+                                            <th>大地高(m)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="zone_transform_2-table-body">
+                                    </tbody>
+                                </table>
+                                <div class="module-footer">
+                                    <div class="module-footer-left">
+                                        <span>计算：<input type="text" class="form-input" placeholder="计算人"></span>
+                                        <span>复核：<input type="text" class="form-input" placeholder="复核人"></span>
+                                        <span>日期：<input type="date" class="form-input"></span>
+                                    </div>
+                                    <div class="module-footer-right">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 四参数转换正算 -->
+                    <div id="four_param_forward-content" class="function-content module-container" style="display: none;">
+                        <div class="module-header">
+                            <h3 class="module-title"><i class="fas fa-ruler-combined"></i> 四参数坐标转换正算</h3>
+                            <div class="module-controls">
+                                <button class="tool-btn" data-action="import-data"><i class="fas fa-file-import"></i> 导入数据</button>
+                                <button class="tool-btn" data-action="import-common-points"><i class="fas fa-file-import"></i> 导入公共点</button>
+                                <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
+                                <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
+                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
+                                <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
+                            </div>
+                        </div>
+                        <div class="content-area">
+                            <!-- 公共点表格和参数显示区域 -->
+                            <div class="four-param-info-panel" style="display: flex; gap: 20px; margin-bottom: 20px;">
+                                <!-- 公共点表格 -->
+                                <div class="common-points-container" style="flex: 1;">
+                                    <div class="panel-header">
+                                        <h4><i class="fas fa-list"></i> 公共点数据</h4>
+                                        <button class="btn btn-sm btn-secondary" onclick="clearCommonPoints()" style="float: right;">清空</button>
+                                    </div>
+                                    <div class="table-container">
+                                        <table class="module-table" id="common-points-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>点名</th>
+                                                    <th>源X(m)</th>
+                                                    <th>源Y(m)</th>
+                                                    <th>目标X(m)</th>
+                                                    <th>目标Y(m)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="common-points-tbody">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                
+                                <!-- 转换参数显示 -->
+                                <div class="parameters-display-container" style="flex: 0 0 300px;">
+                                    <div class="panel-header">
+                                        <h4><i class="fas fa-cogs"></i> 转换参数</h4>
+                                        <button class="btn btn-sm btn-primary" onclick="calculateParametersFromCommonPoints()" style="float: right;">解算参数</button>
+                                    </div>
+                                    <div class="parameters-panel" style="background: #f8f9fa; padding: 15px; border-radius: 5px;">
+                                        <div class="param-item" style="margin-bottom: 10px;">
+                                            <label>X平移参数 (ΔX):</label>
+                                            <span id="param-dx" class="param-value" style="font-weight: bold; color: #007bff;">-</span>
+                                            <span class="param-unit">m</span>
+                                        </div>
+                                        <div class="param-item" style="margin-bottom: 10px;">
+                                            <label>Y平移参数 (ΔY):</label>
+                                            <span id="param-dy" class="param-value" style="font-weight: bold; color: #007bff;">-</span>
+                                            <span class="param-unit">m</span>
+                                        </div>
+                                        <div class="param-item" style="margin-bottom: 10px;">
+                                            <label>旋转角 (α):</label>
+                                            <span id="param-rotation" class="param-value" style="font-weight: bold; color: #007bff;">-</span>
+                                            <span class="param-unit">°</span>
+                                        </div>
+                                        <div class="param-item" style="margin-bottom: 10px;">
+                                            <label>尺度因子 (k):</label>
+                                            <span id="param-scale" class="param-value" style="font-weight: bold; color: #007bff;">-</span>
+                                            <span class="param-unit"></span>
+                                        </div>
+                                        <div class="param-status" id="param-status" style="margin-top: 15px; padding: 8px; border-radius: 3px; text-align: center; display: none;">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 原始坐标转换表格 -->
+                            <div class="table-container">
+                                <div class="project-info">
+                                    <span>工程名称：<input type="text" class="project-name-input module-input" value="未命名工程"></span>
+                                </div>
+                                <table class="module-table">
+                                    <thead>
+                                        <tr>
+                                            <th rowspan="2">点名</th>
+                                            <th colspan="2">源坐标系</th>
+                                            <th colspan="2">目标坐标系</th>
+                                            <th colspan="2">坐标增量</th>
+                                        </tr>
+                                        <tr>
+                                            <th>X(m)</th>
+                                            <th>Y(m)</th>
+                                            <th>X'(m)</th>
+                                            <th>Y'(m)</th>
+                                            <th>ΔX(m)</th>
+                                            <th>ΔY(m)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="four_param_forward-table-body">
+                                    </tbody>
+                                </table>
+                                <div class="module-footer">
+                                    <div class="module-footer-left">
+                                        <span>计算：<input type="text" class="form-input" placeholder="计算人"></span>
+                                        <span>复核：<input type="text" class="form-input" placeholder="复核人"></span>
+                                        <span>日期：<input type="date" class="form-input"></span>
+                                    </div>
+                                    <div class="module-footer-right">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+
+                    <!-- 七参数转换 -->
+                    <div id="seven_param-content" class="function-content module-container" style="display: none;">
+                        <div class="module-header">
+                            <h3 class="module-title"><i class="fas fa-cube"></i> 七参数坐标转换</h3>
+                            <div class="module-controls">
+                                <button class="tool-btn" data-action="import-data"><i class="fas fa-file-import"></i> 导入数据</button>
+                                <button class="tool-btn" data-action="import-common-points"><i class="fas fa-file-import"></i> 导入公共点</button>
+                                <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
+                                <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
+                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
+                                <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
+                            </div>
+                        </div>
+                        <div class="content-area">
+                            <!-- 公共点表格和参数显示区域 -->
+                            <div class="seven-param-info-panel" style="display: flex; gap: 20px; margin-bottom: 20px;">
+                                <!-- 公共点表格 -->
+                                <div class="common-points-container" style="flex: 1;">
+                                    <div class="panel-header">
+                                        <h4><i class="fas fa-list"></i> 公共点数据</h4>
+                                        <button class="btn btn-sm btn-secondary" onclick="clearSevenParamCommonPoints()" style="float: right;">清空</button>
+                                    </div>
+                                    <div class="table-container">
+                                        <table class="module-table" id="seven-param-common-points-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>点名</th>
+                                                    <th>源X(m)</th>
+                                                    <th>源Y(m)</th>
+                                                    <th>源Z(m)</th>
+                                                    <th>目标X(m)</th>
+                                                    <th>目标Y(m)</th>
+                                                    <th>目标Z(m)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="seven-param-common-points-tbody">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                
+                                <!-- 转换参数显示 -->
+                                <div class="parameters-display-container" style="flex: 0 0 300px;">
+                                    <div class="panel-header">
+                                        <h4><i class="fas fa-cogs"></i> 转换参数</h4>
+                                        <button class="btn btn-sm btn-primary" onclick="calculateSevenParamFromCommonPoints()" style="float: right;">解算参数</button>
+                                    </div>
+                                    <div class="parameters-panel" style="background: #f8f9fa; padding: 15px; border-radius: 5px;">
+                                        <div class="param-item" style="margin-bottom: 10px;">
+                                            <label>X平移参数 (ΔX):</label>
+                                            <span id="seven-param-dx" class="param-value" style="font-weight: bold; color: #007bff;">-</span>
+                                            <span class="param-unit">m</span>
+                                        </div>
+                                        <div class="param-item" style="margin-bottom: 10px;">
+                                            <label>Y平移参数 (ΔY):</label>
+                                            <span id="seven-param-dy" class="param-value" style="font-weight: bold; color: #007bff;">-</span>
+                                            <span class="param-unit">m</span>
+                                        </div>
+                                        <div class="param-item" style="margin-bottom: 10px;">
+                                            <label>Z平移参数 (ΔZ):</label>
+                                            <span id="seven-param-dz" class="param-value" style="font-weight: bold; color: #007bff;">-</span>
+                                            <span class="param-unit">m</span>
+                                        </div>
+                                        <div class="param-item" style="margin-bottom: 10px;">
+                                            <label>X旋转角 (εX):</label>
+                                            <span id="seven-param-rotationx" class="param-value" style="font-weight: bold; color: #007bff;">-</span>
+                                            <span class="param-unit">"</span>
+                                        </div>
+                                        <div class="param-item" style="margin-bottom: 10px;">
+                                            <label>Y旋转角 (εY):</label>
+                                            <span id="seven-param-rotationy" class="param-value" style="font-weight: bold; color: #007bff;">-</span>
+                                            <span class="param-unit">"</span>
+                                        </div>
+                                        <div class="param-item" style="margin-bottom: 10px;">
+                                            <label>Z旋转角 (εZ):</label>
+                                            <span id="seven-param-rotationz" class="param-value" style="font-weight: bold; color: #007bff;">-</span>
+                                            <span class="param-unit">"</span>
+                                        </div>
+                                        <div class="param-item" style="margin-bottom: 10px;">
+                                            <label>尺度因子 (k):</label>
+                                            <span id="seven-param-scale" class="param-value" style="font-weight: bold; color: #007bff;">-</span>
+                                            <span class="param-unit">ppm</span>
+                                        </div>
+                                        <div class="param-status" id="seven-param-status" style="margin-top: 15px; padding: 8px; border-radius: 3px; text-align: center; display: none;">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 原始坐标转换表格 -->
+                            <div class="table-container">
+                                <div class="project-info">
+                                    <span>工程名称：<input type="text" class="project-name-input module-input" value="未命名工程"></span>
+                                </div>
+                                <table class="module-table">
+                                    <thead>
+                                        <tr>
+                                            <th rowspan="2">点名</th>
+                                            <th colspan="3">源坐标系</th>
+                                            <th colspan="3">目标坐标系</th>
+                                            <th colspan="3">坐标增量</th>
+                                        </tr>
+                                        <tr>
+                                            <th>X(m)</th>
+                                            <th>Y(m)</th>
+                                            <th>Z(m)</th>
+                                            <th>X'(m)</th>
+                                            <th>Y'(m)</th>
+                                            <th>Z'(m)</th>
+                                            <th>ΔX(m)</th>
+                                            <th>ΔY(m)</th>
+                                            <th>ΔZ(m)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="seven_param-table-body">
+                                    </tbody>
+                                </table>
+                                <div class="module-footer">
+                                    <div class="module-footer-left">
+                                        <span>计算：<input type="text" class="form-input" placeholder="计算人"></span>
+                                        <span>复核：<input type="text" class="form-input" placeholder="复核人"></span>
+                                        <span>日期：<input type="date" class="form-input"></span>
+                                    </div>
+                                    <div class="module-footer-right">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- 曲线测设工作区域 -->
+                <div class="work-area" id="curve-work-area" style="display: none;">
+                    <!-- 默认提示信息 -->
+                    <div id="curve-default-content" class="function-content-wrapper">
+                        <div class="placeholder-content">
+                            <i class="fas fa-route"></i>
+                            <p>请从左侧选择一个曲线测设功能。</p>
+                        </div>
+                    </div>
+
+                    <!-- 对称基本型曲线测设 -->
+                    <div id="transitionCurve-content" class="function-content-wrapper" style="display: none;">
+                        <!-- 功能标题区域 -->
+                        <div class="function-header">
+                            <div class="function-title">
+                                <i class="fas fa-bezier-curve"></i>
+                                <span id="currentCurveFunctionTitle">曲线测设 - 对称基本型曲线测设</span>
+                            </div>
+                            <div class="function-description" id="curveFunctionDescription">
+                                核心功能，支持“综合要素计算→主点坐标→中桩坐标→边桩坐标→DXF导出”全流程
+                            </div>
+                        </div>
+
+                        
+                    </div>
+                </div>
+        </div>
+        </div>
+
+        <!-- 状态栏 -->
+        <div class="status-bar">
+            <div class="status-left">
+                <span>就绪</span>
+                <span>|</span>
+                <span id="currentModule">GPS高程转换</span>
+                <span>|</span>
+                <span id="currentFunction">垂直平移模型</span>
+            </div>
+            <div class="status-right">
+                <span>已知点: <span id="knownCount">0</span></span>
+                <span>|</span>
+                <span>未知点: <span id="unknownCount">0</span></span>
+                <span>|</span>
+                <span>计算状态: <span id="calcStatus">未计算</span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 垂直平移模型计算方案设置 -->
+    <div class="modal" id="verticalTranslationSettingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>垂直平移模型 - 计算方案设置</h3>
+                <button class="modal-close" onclick="closeModal('xyzToBLHSettingsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 通用参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-cog"></i> 通用参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">观测点权重:</label>
+                        <select class="param-input" name="weight_type">
+                            <option value="equal">等权（默认）</option>
+                            <option value="unequal" disabled>不等权（暂不开发）</option>
+                        </select>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">高程异常小数位:</label>
+                        <input type="number" class="param-input" name="height_anomaly_decimals" value="3" min="1" max="6">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">坐标小数位:</label>
+                        <input type="number" class="param-input" name="coordinate_decimals" value="3" min="1" max="6">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">坐标系:</label>
+                        <select class="param-input" name="coordinate_system">
+                            <option value="WGS84">WGS84（默认）</option>
+                            <option value="CGCS2000">CGCS2000</option>
+                            <option value="Beijing54">北京54</option>
+                            <option value="Xian80">西安80</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                    </div>
+                    <div class="param-row custom-ellipsoid" style="display: none;">
+                        <label class="param-label">椭球长半轴(m):</label>
+                        <input type="number" class="param-input" name="semi_major_axis" value="6378137" step="0.001">
+                    </div>
+                    <div class="param-row custom-ellipsoid" style="display: none;">
+                        <label class="param-label">扁率分母(1/f):</label>
+                        <input type="number" class="param-input" name="flattening_denominator" value="298.257222101" step="0.000000001">
+                    </div>
+                </div>
+
+                <!-- 模型说明 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-info-circle"></i> 模型说明</h4>
+                    <div class="model-description">
+                        <p><strong>垂直平移模型</strong>适用于小范围、高程异常变化平缓的区域。</p>
+                        <p><strong>计算公式:</strong> ζ̄ = (1/n) × Σζᵢ</p>
+                        <p><strong>适用场景:</strong> 平原操场、厂房区等小范围区域</p>
+                        <p><strong>最少点数:</strong> ≥1个已知GPS水准点</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="tool-btn" onclick="closeModal('verticalTranslationSettingsModal')">取消</button>
+                <button class="tool-btn" onclick="showHelp('verticalTranslation')">帮助</button>
+                <button class="tool-btn primary" id="saveVerticalSettingsBtn">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 线性基函数拟合计算方案设置 -->
+    <div class="modal" id="linearFittingSettingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>线性基函数拟合 - 计算方案设置</h3>
+                <button class="modal-close" onclick="closeModal('blhToXYZSettingsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 通用参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-cog"></i> 通用参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">观测点权重:</label>
+                        <select class="param-input" name="weight_type">
+                            <option value="equal">等权（默认）</option>
+                            <option value="unequal" disabled>不等权（暂不开发）</option>
+                        </select>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">高程异常小数位:</label>
+                        <input type="number" class="param-input" name="height_anomaly_decimals" value="3" min="1" max="6">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">拟合系数小数位:</label>
+                        <input type="number" class="param-input" name="coefficient_decimals" value="4" min="1" max="8">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">坐标小数位:</label>
+                        <input type="number" class="param-input" name="coordinate_decimals" value="3" min="1" max="6">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">坐标系:</label>
+                        <select class="param-input" name="coordinate_system">
+                            <option value="WGS84">WGS84（默认）</option>
+                            <option value="CGCS2000">CGCS2000</option>
+                            <option value="Beijing54">北京54</option>
+                            <option value="Xian80">西安80</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 线性模型专属参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-route"></i> 独立线路坐标系参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">中央子午线:</label>
+                        <select class="param-input" name="central_meridian_type">
+                            <option value="auto">测区平均经度（默认）</option>
+                            <option value="manual">手动输入</option>
+                        </select>
+                    </div>
+                    <div class="param-row manual-meridian" style="display: none;">
+                        <label class="param-label">中央子午线(°′″):</label>
+                        <input type="text" class="param-input" name="central_meridian_manual" value="114°00′00″" placeholder="如: 114°00′00″">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">抵偿高程面:</label>
+                        <select class="param-input" name="compensation_height_type">
+                            <option value="auto">测区平均大地高（默认）</option>
+                            <option value="manual">手动输入</option>
+                        </select>
+                    </div>
+                    <div class="param-row manual-height" style="display: none;">
+                        <label class="param-label">抵偿高程面(m):</label>
+                        <input type="number" class="param-input" name="compensation_height_manual" value="0" step="0.001">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">中线起点:</label>
+                        <select class="param-input" name="centerline_origin_type">
+                            <option value="auto">系统拟合（默认）</option>
+                            <option value="manual">手动输入</option>
+                        </select>
+                    </div>
+                    <div class="param-row manual-origin" style="display: none;">
+                        <label class="param-label">起点纬度(°′″):</label>
+                        <input type="text" class="param-input" name="origin_latitude" placeholder="如: 23°10′00″">
+                    </div>
+                    <div class="param-row manual-origin" style="display: none;">
+                        <label class="param-label">起点经度(°′″):</label>
+                        <input type="text" class="param-input" name="origin_longitude" placeholder="如: 114°00′00″">
+                    </div>
+                </div>
+
+                <!-- 拟合模型选择 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-chart-line"></i> 拟合模型选择</h4>
+                    <div class="param-row">
+                        <label class="param-label">模型类型:</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="fitting_model" value="linear" checked>
+                                <span>直线模型: ζᵢ = α₀ + α₁yᵢ</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="fitting_model" value="quadratic">
+                                <span>二次曲线模型: ζᵢ = α₀ + α₁yᵢ + α₂yᵢ²（默认）</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 模型说明 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-info-circle"></i> 模型说明</h4>
+                    <div class="model-description">
+                        <p><strong>线性基函数拟合</strong>适用于铁路、公路等线性工程。</p>
+                        <p><strong>适用场景:</strong> 线性工程，含独立线路坐标系建立</p>
+                        <p><strong>最少点数:</strong> 直线模型≥2个点，二次曲线模型≥3个点</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="tool-btn" onclick="closeModal('linearFittingSettingsModal')">取消</button>
+                <button class="tool-btn" onclick="showHelp('linearFitting')">帮助</button>
+                <button class="tool-btn primary" id="saveLinearSettingsBtn">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 面基函数拟合计算方案设置 -->
+    <div class="modal" id="surfaceFittingSettingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>面基函数拟合 - 计算方案设置</h3>
+                <button class="modal-close" onclick="closeModal('xyzToBLHSettingsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 通用参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-cog"></i> 通用参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">观测点权重:</label>
+                        <select class="param-input" name="weight_type">
+                            <option value="equal">等权（默认）</option>
+                            <option value="unequal" disabled>不等权（暂不开发）</option>
+                        </select>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">高程异常小数位:</label>
+                        <input type="number" class="param-input" name="height_anomaly_decimals" value="3" min="1" max="6">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">拟合系数小数位:</label>
+                        <input type="number" class="param-input" name="coefficient_decimals" value="4" min="1" max="8">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">坐标小数位:</label>
+                        <input type="number" class="param-input" name="coordinate_decimals" value="3" min="1" max="6">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">坐标系:</label>
+                        <select class="param-input" name="coordinate_system">
+                            <option value="WGS84">WGS84（默认）</option>
+                            <option value="CGCS2000">CGCS2000</option>
+                            <option value="Beijing54">北京54</option>
+                            <option value="Xian80">西安80</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 面拟合专属参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-map-marked-alt"></i> 参考点设置</h4>
+                    <div class="param-row">
+                        <label class="param-label">参考点选择:</label>
+                        <select class="param-input" name="reference_point_type">
+                            <option value="auto">自动选择（测区中心）</option>
+                            <option value="select">从已知点中选择</option>
+                            <option value="manual">手动输入坐标</option>
+                        </select>
+                    </div>
+                    <div class="param-row select-reference" style="display: none;">
+                        <label class="param-label">选择已知点:</label>
+                        <select class="param-input" name="reference_point_name">
+                            <option value="">请先添加已知点数据</option>
+                        </select>
+                    </div>
+                    <div class="param-row manual-reference" style="display: none;">
+                        <label class="param-label">参考点纬度(°′″):</label>
+                        <input type="text" class="param-input" name="reference_latitude" placeholder="如: 23°10′00″">
+                    </div>
+                    <div class="param-row manual-reference" style="display: none;">
+                        <label class="param-label">参考点经度(°′″):</label>
+                        <input type="text" class="param-input" name="reference_longitude" placeholder="如: 114°00′00″">
+                    </div>
+                </div>
+
+                <!-- 拟合模型选择 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-cube"></i> 拟合模型选择</h4>
+                    <div class="param-row">
+                        <label class="param-label">模型类型:</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="surface_model" value="plane">
+                                <span>平面模型: ζᵢ = α₀ + α₁ΔBᵢ + α₃ΔLᵢ</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="surface_model" value="quadratic" checked>
+                                <span>二次曲面模型: ζᵢ = α₀ + α₁ΔBᵢ + α₂ΔBᵢ² + α₃ΔLᵢ + α₄ΔLᵢ² + α₅ΔBᵢΔLᵢ（默认）</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 模型说明 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-info-circle"></i> 模型说明</h4>
+                    <div class="model-description">
+                        <p><strong>面基函数拟合</strong>适用于大面积、地形略有起伏的面状区域。</p>
+                        <p><strong>适用场景:</strong> 大面积测区，含参考点设置</p>
+                        <p><strong>最少点数:</strong> 平面模型≥3个点，二次曲面模型≥6个点</p>
+                        <p><strong>参考点建议:</strong> 选择靠近测区中心位置的已知点</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="tool-btn" onclick="closeModal('surfaceFittingSettingsModal')">取消</button>
+                <button class="tool-btn" onclick="showHelp('surfaceFitting')">帮助</button>
+                <button class="tool-btn primary" id="saveSurfaceSettingsBtn">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 数据导入模态框 -->
+    <div class="modal" id="importModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="importModalTitle">导入已知点数据</h3>
+                <button class="modal-close" onclick="closeModal('blhToXYZSettingsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="import-tabs">
+                    <div class="import-tab active" data-tab="file">文件导入</div>
+                    <div class="import-tab" data-tab="manual">手动输入</div>
+                </div>
+                
+                <div class="import-content">
+                    <!-- 文件导入 -->
+                    <div class="import-panel active" id="fileImportPanel">
+                        <div class="file-upload" id="dropZone">
+                            <i class="fas fa-calculator mb-16 upload-icon-large"></i>
+                            <p>拖拽文件到此处或点击选择文件</p>
+                            <p class="text-small-muted">支持 TXT, DAT 格式</p>
+                            <input type="file" id="fileInput" accept=".txt,.dat" style="display: none;">
+                            <button class="tool-btn primary" onclick="document.getElementById('fileInput').click()">
+                                <i class="fas fa-folder-open"></i> 选择文件
+                            </button>
+                        </div>
+                        
+                        <div class="file-format-info">
+                            <h4>文件格式说明:</h4>
+                            <p><strong>已知点格式:</strong> 点名 纬度 经度 大地高 高程异常</p>
+                            <p><strong>未知点格式:</strong> 点名 纬度 经度 大地高</p>
+                            <p><strong>示例:</strong></p>
+                            <pre>GPS01 23°10′30″ 114°05′20″ 85.234 28.456
+GPS02 23°11′15″ 114°06′10″ 86.123 28.523</pre>
+                        </div>
+                    </div>
+                    
+                    <!-- 手动输入 -->
+                    <div class="import-panel" id="manualImportPanel">
+                        <div class="manual-input-form">
+                            <div class="input-row">
+                                <label>点名:</label>
+                                <input type="text" id="manualPointName" placeholder="如: GPS01">
+                            </div>
+                            <div class="input-row">
+                                <label>纬度:</label>
+                                <input type="text" id="manualLatitude" placeholder="如: 23°10′30″ 或 23.175">
+                            </div>
+                            <div class="input-row">
+                                <label>经度:</label>
+                                <input type="text" id="manualLongitude" placeholder="如: 114°05′20″ 或 114.089">
+                            </div>
+                            <div class="input-row">
+                                <label>大地高(m):</label>
+                                <input type="number" id="manualEllipsoidHeight" step="0.001" placeholder="如: 85.234">
+                            </div>
+                            <div class="input-row" id="manualHeightAnomalyRow">
+                                <label>高程异常(m):</label>
+                                <input type="number" id="manualHeightAnomaly" step="0.001" placeholder="如: 28.456">
+                            </div>
+                            <button class="tool-btn primary" id="addManualPointBtn">
+                                <i class="fas fa-plus"></i> 添加到表格
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="tool-btn" onclick="closeModal('importModal')">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 表格设置模态框 -->
+    <div class="modal" id="tableSettingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>表格设置</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="param-group">
+                    <h4>显示设置</h4>
+                    <div class="param-row">
+                        <label class="param-label">字体大小:</label>
+                        <select class="param-input" name="font_size">
+                            <option value="12">12px</option>
+                            <option value="14" selected>14px（默认）</option>
+                            <option value="16">16px</option>
+                            <option value="18">18px</option>
+                        </select>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">行高:</label>
+                        <select class="param-input" name="row_height">
+                            <option value="compact">紧凑</option>
+                            <option value="normal" selected>标准（默认）</option>
+                            <option value="loose">宽松</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="param-group">
+                    <h4>打印设置</h4>
+                    <div class="param-row">
+                        <label class="param-label">页边距(mm):</label>
+                        <input type="number" class="param-input" name="page_margin" value="20" min="10" max="50">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">页面方向:</label>
+                        <select class="param-input" name="page_orientation">
+                            <option value="portrait">纵向</option>
+                            <option value="landscape" selected>横向（默认）</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="tool-btn" onclick="closeModal('tableSettingsModal')">取消</button>
+                <button class="tool-btn primary" id="saveTableSettingsBtn">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 坐标转换计算方案设置 -->
+    <div class="modal" id="coordinateSettingsModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>坐标转换 - 计算方案</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 椭球参数 -->
+                <div class="param-group" id="ellipsoid-params" style="display: none;">
+                    <h4><i class="fas fa-globe-asia"></i> 椭球参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">参考椭球:</label>
+                        <select class="param-input" name="coord_ellipsoid">
+                            <option value="CGCS2000">CGCS2000</option>
+                            <option value="Xian80">西安80</option>
+                            <option value="Beijing54">北京54</option>
+                            <option value="WGS84">WGS84</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                    </div>
+                    <div class="param-row custom-ellipsoid-params" style="display: none;">
+                        <label class="param-label">长半轴 a (m):</label>
+                        <input type="number" class="param-input" name="coord_semi_major_axis" value="6378137" step="0.001">
+                    </div>
+                    <div class="param-row custom-ellipsoid-params" style="display: none;">
+                        <label class="param-label">扁率倒数 1/f:</label>
+                        <input type="number" class="param-input" name="coord_flattening_denominator" value="298.257222101" step="0.000000001">
+                    </div>
+                </div>
+
+                <!-- 投影参数 -->
+                <div class="param-group" id="projection-params" style="display: none;">
+                    <h4><i class="fas fa-map"></i> 投影参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">投影类型:</label>
+                        <select class="param-input" name="proj_type">
+                            <option value="gauss">高斯-克吕格投影</option>
+                        </select>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">中央子午线 L₀:</label>
+                        <input type="text" class="param-input" name="proj_central_meridian" placeholder="例如: 114°00′00″ 或 114">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">东伪偏移 FE (m):</label>
+                        <input type="number" class="param-input" name="proj_false_easting" value="500000">
+                    </div>
+                     <div class="param-row">
+                        <label class="param-label">北伪偏移 FN (m):</label>
+                        <input type="number" class="param-input" name="proj_false_northing" value="0">
+                    </div>
+                </div>
+
+                <!-- 源投影参数 -->
+                <div class="param-group" id="source-projection-params" style="display: none;">
+                    <h4><i class="fas fa-map-signs"></i> 源投影参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">中央子午线 L₀:</label>
+                        <input type="text" class="param-input" name="source_proj_central_meridian" placeholder="例如: 114°00′00″">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">东伪偏移 FE (m):</label>
+                        <input type="number" class="param-input" name="source_proj_false_easting" value="500000">
+                    </div>
+                </div>
+
+                <!-- 目标投影参数 -->
+                <div class="param-group" id="target-projection-params" style="display: none;">
+                    <h4><i class="fas fa-map-marked-alt"></i> 目标投影参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">中央子午线 L₀:</label>
+                        <input type="text" class="param-input" name="target_proj_central_meridian" placeholder="例如: 117°00′00″">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">东伪偏移 FE (m):</label>
+                        <input type="number" class="param-input" name="target_proj_false_easting" value="500000">
+                    </div>
+                </div>
+
+                <!-- 四参数 -->
+                <div class="param-group" id="four-param-settings" style="display: none;">
+                    <h4><i class="fas fa-ruler-combined"></i> 四参数模型</h4>
+                    <div class="param-row">
+                        <label class="param-label">X平移 ΔX (m):</label>
+                        <input type="number" class="param-input" name="four_param_dx" value="0" step="any">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">Y平移 ΔY (m):</label>
+                        <input type="number" class="param-input" name="four_param_dy" value="0" step="any">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">旋转角 θ (秒):</label>
+                        <input type="number" class="param-input" name="four_param_theta" value="0" step="any">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">尺度因子 k:</label>
+                        <input type="number" class="param-input" name="four_param_k" value="1" step="any">
+                    </div>
+                </div>
+
+                <!-- 七参数 -->
+                <div class="param-group" id="seven-param-settings" style="display: none;">
+                    <h4><i class="fas fa-cube"></i> 七参数模型 (布尔莎模型)</h4>
+                    <div class="param-row">
+                        <label class="param-label">X平移 ΔX (m):</label>
+                        <input type="number" class="param-input" name="seven_param_dx" value="0" step="any">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">Y平移 ΔY (m):</label>
+                        <input type="number" class="param-input" name="seven_param_dy" value="0" step="any">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">Z平移 ΔZ (m):</label>
+                        <input type="number" class="param-input" name="seven_param_dz" value="0" step="any">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">X旋转 εx (秒):</label>
+                        <input type="number" class="param-input" name="seven_param_ex" value="0" step="any">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">Y旋转 εy (秒):</label>
+                        <input type="number" class="param-input" name="seven_param_ey" value="0" step="any">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">Z旋转 εz (秒):</label>
+                        <input type="number" class="param-input" name="seven_param_ez" value="0" step="any">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">尺度因子 k (ppm):</label>
+                        <input type="number" class="param-input" name="seven_param_k" value="0" step="any">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="tool-btn" onclick="closeModal('coordinateSettingsModal')">取消</button>
+                <button class="tool-btn primary" id="saveCoordinateSettingsBtn">确定</button>
+            </div>
+        </div>
+    </div>
+
+    
+
+    <!-- 高斯投影正算计算方案设置 -->
+    <div class="modal" id="gaussForwardSettingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>高斯投影正算 - 计算方案设置</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 椭球参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-globe"></i> 椭球参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">坐标系:</label>
+                        <select class="param-input" id="gauss-ellipsoid">
+                            <option value="WGS84">WGS84坐标系</option>
+                            <option value="CGCS2000">CGCS2000坐标系</option>
+                            <option value="Beijing54">北京54坐标系</option>
+                            <option value="Xian80" selected>西安80坐标系</option>
+                        </select>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">长半轴(m):</label>
+                        <input type="number" class="param-input" id="gauss-semi-major" value="6378137" step="0.001">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">扁率分母1/:</label>
+                        <input type="number" class="param-input" id="gauss-flattening" value="298.257222101" step="0.000000001">
+                    </div>
+                </div>
+
+                <!-- 投影参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-map"></i> 投影参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">Y坐标500KM:</label>
+                        <input type="checkbox" id="gauss-500km" checked>
+                        <label for="gauss-500km">启用500km偏移</label>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">椭球膨胀方式:</label>
+                        <select class="param-input" id="gauss-meridian-method">
+                            <option value="dRm=dH(默认)" selected>dRm=dH(默认)</option>
+                            <option value="其他方式">其他方式</option>
+                        </select>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">测区纬度:</label>
+                        <input type="number" class="param-input" id="gauss-zone-lat" value="0" step="0.1">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">中央子午线(DMS):</label>
+                        <input type="number" class="param-input" id="gauss-central-meridian" value="114" step="1">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">投影面大地高(m):</label>
+                        <input type="number" class="param-input" id="gauss-projection-height" value="0" step="0.001">
+                    </div>
+                </div>
+
+                <!-- 输出格式 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-cog"></i> 输出格式</h4>
+                    <div class="param-row">
+                        <label class="param-label">坐标小数位:</label>
+                        <input type="number" class="param-input" id="gauss-coord-decimals" value="3" min="0" max="6">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">角度格式:</label>
+                        <select class="param-input" id="gauss-angle-format">
+                            <option value="dms" selected>度分秒(DMS)</option>
+                            <option value="decimal">十进制度</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="tool-btn" onclick="closeModal('gaussForwardSettingsModal')">取消</button>
+                <button class="tool-btn" onclick="showHelp('gaussForward')">帮助</button>
+                <button class="tool-btn primary" id="saveGaussForwardSettingsBtn">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 高斯投影反算计算方案设置 -->
+    <div class="modal" id="gaussInverseSettingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>高斯投影反算 - 计算方案设置</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 椭球参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-globe"></i> 椭球参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">坐标系:</label>
+                        <select class="param-input" id="gauss-inverse-ellipsoid">
+                            <option value="WGS84">WGS84坐标系</option>
+                            <option value="CGCS2000" selected>CGCS2000坐标系</option>
+                            <option value="Beijing54">北京54坐标系</option>
+                            <option value="Xian80">西安80坐标系</option>
+                        </select>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">长半轴(m):</label>
+                        <input type="number" class="param-input" id="gauss-inverse-semi-major" value="6378137" step="0.001">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">扁率分母1/:</label>
+                        <input type="number" class="param-input" id="gauss-inverse-flattening" value="298.257222101" step="0.000000001">
+                    </div>
+                </div>
+
+                <!-- 投影参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-map"></i> 投影参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">Y坐标500KM:</label>
+                        <input type="checkbox" id="gauss-inverse-500km" checked>
+                        <label for="gauss-inverse-500km">启用500km偏移</label>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">椭球膨胀方式:</label>
+                        <select class="param-input" id="gauss-inverse-meridian-method">
+                            <option value="dRm=dH(默认)" selected>dRm=dH(默认)</option>
+                            <option value="其他方式">其他方式</option>
+                        </select>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">测区纬度:</label>
+                        <input type="number" class="param-input" id="gauss-inverse-zone-lat" value="0" step="0.1">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">中央子午线(°):</label>
+                        <input type="number" class="param-input" id="gauss-inverse-central-meridian" value="114" step="1">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">投影面大地高(m):</label>
+                        <input type="number" class="param-input" id="gauss-inverse-projection-height" value="0" step="0.001">
+                    </div>
+                </div>
+
+                <!-- 输出格式 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-cog"></i> 输出格式</h4>
+                    <div class="param-row">
+                        <label class="param-label">坐标小数位:</label>
+                        <input type="number" class="param-input" id="gauss-inverse-coord-decimals" value="6" min="0" max="8">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">角度格式:</label>
+                        <select class="param-input" id="gauss-inverse-angle-format">
+                            <option value="dms" selected>度分秒(DMS)</option>
+                            <option value="decimal">十进制度</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="tool-btn" onclick="closeModal('gaussInverseSettingsModal')">取消</button>
+                <button class="tool-btn" onclick="showHelp('gaussInverse')">帮助</button>
+                <button class="tool-btn primary" id="saveGaussInverseSettingsBtn">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- XYZ转BLH计算方案设置 -->
+    <div class="modal" id="xyzToBLHSettingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>XYZ转BLH - 计算方案设置</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 椭球参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-globe"></i> 椭球参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">坐标系:</label>
+                        <select class="param-input" id="xyz-blh-ellipsoid" onchange="handleXYZToBLHEllipsoidChange()">
+                            <option value="CGCS2000" selected>CGCS2000坐标系</option>
+                            <option value="WGS84">WGS84坐标系</option>
+                            <option value="Beijing54">北京54坐标系</option>
+                            <option value="Xian80">西安80坐标系</option>
+                        </select>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">长半轴(m):</label>
+                        <input type="number" class="param-input" id="xyz-blh-semi-major" value="6378137" step="0.001">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">扁率分母1/:</label>
+                        <input type="number" class="param-input" id="xyz-blh-flattening" value="298.257222101" step="0.000000001">
+                    </div>
+                </div>
+
+                <!-- 输出格式 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-cog"></i> 输出格式</h4>
+                    <div class="param-row">
+                        <label class="param-label">坐标小数位:</label>
+                        <input type="number" class="param-input" id="xyz-blh-coord-decimals" value="6" min="0" max="8">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">角度格式:</label>
+                        <select class="param-input" id="xyz-blh-angle-format">
+                            <option value="dms" selected>度分秒(DMS)</option>
+                            <option value="decimal">十进制度</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="tool-btn" onclick="closeModal('xyzToBLHSettingsModal')">取消</button>
+                <button class="tool-btn" onclick="showHelp('xyzToBLH')">帮助</button>
+                <button class="tool-btn primary" id="saveXYZToBLHSettingsBtn" onclick="saveXYZToBLHSettings()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BLH转XYZ计算方案设置 -->
+    <div class="modal" id="blhToXYZSettingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>BLH转XYZ - 计算方案设置</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 椭球参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-globe"></i> 椭球参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">坐标系:</label>
+                        <select class="param-input" id="blh-xyz-ellipsoid" onchange="handleBLHToXYZEllipsoidChange()">
+                            <option value="CGCS2000" selected>CGCS2000坐标系</option>
+                            <option value="WGS84">WGS84坐标系</option>
+                            <option value="Beijing54">北京54坐标系</option>
+                            <option value="Xian80">西安80坐标系</option>
+                        </select>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">长半轴(m):</label>
+                        <input type="number" class="param-input" id="blh-xyz-semi-major" value="6378137" step="0.001">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">扁率分母1/:</label>
+                        <input type="number" class="param-input" id="blh-xyz-flattening" value="298.257222101" step="0.000000001">
+                    </div>
+                </div>
+
+                <!-- 输出格式 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-cog"></i> 输出格式</h4>
+                    <div class="param-row">
+                        <label class="param-label">坐标小数位:</label>
+                        <input type="number" class="param-input" id="blh-xyz-coord-decimals" value="3" min="0" max="6">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="tool-btn" onclick="closeModal('blhToXYZSettingsModal')">取消</button>
+                <button class="tool-btn" onclick="showHelp('blhToXYZ')">帮助</button>
+                <button class="tool-btn primary" id="saveBLHToXYZSettingsBtn" onclick="saveBLHToXYZSettings()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 换带与投影面变换1计算方案设置 -->
+    <div class="modal" id="zoneTransform1SettingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>换带与投影面变换1 - 计算方案设置</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 投影带参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-map"></i> 投影带参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">源投影带:</label>
+                        <input type="number" class="param-input" id="zone1-source-zone" value="20" min="1" max="60">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">目标投影带:</label>
+                        <input type="number" class="param-input" id="zone1-target-zone" value="21" min="1" max="60">
+                    </div>
+                </div>
+
+                <!-- 椭球参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-globe"></i> 椭球参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">坐标系:</label>
+                        <select class="param-input" id="zone1-ellipsoid">
+                            <option value="CGCS2000" selected>CGCS2000坐标系</option>
+                            <option value="WGS84">WGS84坐标系</option>
+                            <option value="Beijing54">北京54坐标系</option>
+                            <option value="Xian80">西安80坐标系</option>
+                        </select>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">长半轴(m):</label>
+                        <input type="number" class="param-input" id="zone1-semi-major" value="6378137" step="0.001">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">扁率分母1/:</label>
+                        <input type="number" class="param-input" id="zone1-flattening" value="298.257222101" step="0.000000001">
+                    </div>
+                </div>
+
+                <!-- 输出格式 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-cog"></i> 输出格式</h4>
+                    <div class="param-row">
+                        <label class="param-label">坐标小数位:</label>
+                        <input type="number" class="param-input" id="zone1-coord-decimals" value="3" min="0" max="8">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="tool-btn" onclick="closeModal('zoneTransform1SettingsModal')">取消</button>
+                <button class="tool-btn" onclick="showHelp('zoneTransform1')">帮助</button>
+                <button class="tool-btn primary" id="saveZoneTransform1SettingsBtn" onclick="saveZoneTransform1Settings()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 换带与投影面变换2计算方案设置 -->
+    <div class="modal" id="zoneTransform2SettingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>换带与投影面变换2 - 计算方案设置</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 投影带参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-map"></i> 投影带参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">源投影带:</label>
+                        <input type="number" class="param-input" id="zone2-source-zone" value="20" min="1" max="60">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">目标投影带:</label>
+                        <input type="number" class="param-input" id="zone2-target-zone" value="21" min="1" max="60">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">换带前投影面大地高(m):</label>
+                        <input type="number" class="param-input" id="zone2-source-elevation" value="0" step="0.001">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">换带后投影面大地高(m):</label>
+                        <input type="number" class="param-input" id="zone2-target-elevation" value="0" step="0.001">
+                    </div>
+                </div>
+
+                <!-- 椭球参数 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-globe"></i> 椭球参数</h4>
+                    <div class="param-row">
+                        <label class="param-label">坐标系:</label>
+                        <select class="param-input" id="zone2-ellipsoid">
+                            <option value="CGCS2000" selected>CGCS2000坐标系</option>
+                            <option value="WGS84">WGS84坐标系</option>
+                            <option value="Beijing54">北京54坐标系</option>
+                            <option value="Xian80">西安80坐标系</option>
+                        </select>
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">长半轴(m):</label>
+                        <input type="number" class="param-input" id="zone2-semi-major" value="6378137" step="0.001">
+                    </div>
+                    <div class="param-row">
+                        <label class="param-label">扁率分母1/:</label>
+                        <input type="number" class="param-input" id="zone2-flattening" value="298.257222101" step="0.000000001">
+                    </div>
+                </div>
+
+                <!-- 输出格式 -->
+                <div class="param-group">
+                    <h4><i class="fas fa-cog"></i> 输出格式</h4>
+                    <div class="param-row">
+                        <label class="param-label">坐标小数位:</label>
+                        <input type="number" class="param-input" id="zone2-coord-decimals" value="3" min="0" max="8">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="tool-btn" onclick="closeModal('zoneTransform2SettingsModal')">取消</button>
+                <button class="tool-btn" onclick="showHelp('zoneTransform2')">帮助</button>
+                <button class="tool-btn primary" id="saveZoneTransform2SettingsBtn" onclick="saveZoneTransform2Settings()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 脚本文件 -->
+    <script src="notification-system.js"></script>
+    <script src="script.js"></script>
+    <script src="linear-surface-fitting.js"></script>
+    <script src="coordinate-transform.js"></script>
+    <script src="coordinate-tables.js"></script>
+    <script src="coordinate-settings.js"></script>
+    <script src="coordinate-main.js"></script>
+    <script src="file-handler.js"></script>
+    <script src="export-enhanced.js"></script>
+    <script src="gauss-forward.js"></script>
+    <script src="gauss-inverse.js"></script>
+    <script src="xyz-to-blh.js"></script>
+    <script src="blh-to-xyz.js"></script>
+    <script src="zone-transform1.js"></script>
+    <script src="zone-transform2.js"></script>
+    <script src="four-param-forward.js"></script>
+    <script src="seven-param.js"></script>
+    <script src="curve-design-service.js"></script>
+    <script src="dxf-export-service.js"></script>
+    <script src="curve-design.js?"></script>
+    <script src="curve-combined-table.js"></script>
+    <script src="curve-export.js?"></script>
+</body>
+</html>
