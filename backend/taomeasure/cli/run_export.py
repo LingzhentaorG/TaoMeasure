@@ -3,7 +3,7 @@ Standalone script for generating a sample DXF file from road design data.
 """
 
 import os
-from dxf_exporter import DxfRoadExporter
+from ..domain.dxf_exporter import DxfRoadExporter
 
 def get_sample_data():
     """
