@@ -10,7 +10,9 @@ let calculationResults = {};
 let calculationSettings = {};
 
 // API基础URL
-const API_BASE = 'http://127.0.0.1:5000';
+const DEFAULT_API_BASE = `${window.location.protocol}//${window.location.hostname}:5000`;
+// 后端接口基址，可通过 window.__TAOMEASURE_API__ 动态覆盖。
+const API_BASE = window.__TAOMEASURE_API__ || DEFAULT_API_BASE;
 
 // 功能配置
 const FUNCTION_CONFIG = {

@@ -13,8 +13,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from curve_data_processor import CurveMeasurementDataProcessor
-from dxf_exporter import DxfRoadExporter
+from ..domain.curve_data_processor import CurveMeasurementDataProcessor
+from ..domain.dxf_exporter import DxfRoadExporter
 
 AngleHint = Union[int, str]
 
