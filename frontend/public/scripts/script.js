@@ -1585,8 +1585,8 @@ function displayCalculationResults(results) {
                 const anomaly = result.calculated_anomaly || result.anomaly || result.height_anomaly;
                 const normalHeight = result.normal_height || result.h || result.height;
                 
-                calculatedCells[0].textContent = anomaly ? anomaly.toFixed(3) : '-';
-                calculatedCells[1].textContent = normalHeight ? normalHeight.toFixed(3) : '-';
+                calculatedCells[0].textContent = anomaly ? anomaly.toFixed(5) : '-';
+                calculatedCells[1].textContent = normalHeight ? normalHeight.toFixed(5) : '-';
                 
                 // 添加成功样式
                 calculatedCells[0].classList.add('result-success');
@@ -1825,8 +1825,8 @@ function prepareExportData() {
             point.latitude,
             point.longitude,
             point.ellipsoidHeight.toFixed(3),
-            point.heightAnomaly.toFixed(3),
-            normalHeight.toFixed(3),
+            point.heightAnomaly.toFixed(5),
+            normalHeight.toFixed(5),
             point.remark || ''
         ]);
     });
@@ -1846,8 +1846,8 @@ function prepareExportData() {
                     unknownPoint.latitude,
                     unknownPoint.longitude,
                     unknownPoint.ellipsoidHeight.toFixed(3),
-                    result.calculatedHeightAnomaly?.toFixed(3) || '-',
-                    result.normalHeight?.toFixed(3) || '-'
+                    result.calculatedHeightAnomaly?.toFixed(5) || '-',
+                    result.normalHeight?.toFixed(5) || '-'
                 ]);
             }
         });
@@ -1996,7 +1996,7 @@ function initializeDefaultSettings() {
 function getDefaultSettings(func) {
     const defaultSettings = {
         weight_type: 'equal',
-        height_anomaly_decimals: 3,
+        height_anomaly_decimals: 5,
         coordinate_decimals: 3,
         coordinate_system: 'WGS84'
     };
