@@ -532,9 +532,6 @@ function switchFunction(module, func, clickedButton) {
         detail: { module: module, func: func }
     });
     document.dispatchEvent(functionSwitchedEvent);
-    
-    // 更新状态栏
-    updateStatusBar();
 }
 
 function updateFunctionHeader(func) {
@@ -553,25 +550,8 @@ function updateFunctionHeader(func) {
     }
 }
 
-function updateStatusBar() {
-    const currentFunctionElement = document.getElementById('currentFunction');
-    if (currentFunctionElement) {
-        const config = FUNCTION_CONFIG[currentFunction];
-        currentFunctionElement.textContent = config ? config.title.split(' - ')[1] : currentFunction;
-    }
-    
-    updateDataCounts();
-}
-
 function updateDataCounts() {
-    const knownCount = document.querySelectorAll('#knownPointsBody tr').length;
-    const unknownCount = document.querySelectorAll('#unknownPointsBody tr').length;
-    
-    const knownCountElement = document.getElementById('knownCount');
-    const unknownCountElement = document.getElementById('unknownCount');
-    
-    if (knownCountElement) knownCountElement.textContent = knownCount;
-    if (unknownCountElement) unknownCountElement.textContent = unknownCount;
+    // 此函数保留用于其他可能需要数据计数的功能
 }
 
 // 选项卡切换
@@ -634,13 +614,13 @@ function addKnownPointRow(tbody) {
     const row = document.createElement('tr');
     row.innerHTML = `
         <td><input type="checkbox" class="row-select"></td>
-        <td class="editable"><input type="text" placeholder="GPS01" maxlength="20"></td>
-        <td class="editable"><input type="text" placeholder="23°10′30″" pattern="[0-9°′″.]+"></td>
-        <td class="editable"><input type="text" placeholder="114°05′20″" pattern="[0-9°′″.]+"></td>
-        <td class="editable"><input type="number" step="0.001" placeholder="85.234"></td>
-        <td class="editable"><input type="number" step="0.001" placeholder="28.456"></td>
+        <td class="editable"><input type="text" placeholder="" maxlength="20"></td>
+        <td class="editable"><input type="text" placeholder="" pattern="[0-9°′″.]+"></td>
+        <td class="editable"><input type="text" placeholder="" pattern="[0-9°′″.]+"></td>
+        <td class="editable"><input type="number" step="" placeholder=""></td>
+        <td class="editable"><input type="number" step="" placeholder=""></td>
         <td class="calculated">-</td>
-        <td class="editable"><input type="text" placeholder="GPS水准点" maxlength="50"></td>
+        <td class="editable"><input type="text" placeholder="" maxlength="50"></td>
     `;
     
     // 添加输入事件监听器
@@ -664,10 +644,10 @@ function addUnknownPointRow(tbody) {
     const row = document.createElement('tr');
     row.innerHTML = `
         <td><input type="checkbox" class="row-select"></td>
-        <td class="editable"><input type="text" placeholder="P01" maxlength="20"></td>
-        <td class="editable"><input type="text" placeholder="23°10′30″" pattern="[0-9°′″.]+"></td>
-        <td class="editable"><input type="text" placeholder="114°05′20″" pattern="[0-9°′″.]+"></td>
-        <td class="editable"><input type="number" step="0.001" placeholder="85.234"></td>
+        <td class="editable"><input type="text" placeholder="" maxlength="20"></td>
+        <td class="editable"><input type="text" placeholder="" pattern="[0-9°′″.]+"></td>
+        <td class="editable"><input type="text" placeholder="" pattern="[0-9°′″.]+"></td>
+        <td class="editable"><input type="number" step="" placeholder=""></td>
         <td class="calculated">-</td>
         <td class="calculated">-</td>
     `;
@@ -1376,7 +1356,6 @@ async function startCalculation() {
         
         // 显示计算状态
         showLoading(true);
-        updateCalculationStatus('计算中...');
         
         // 准备计算参数
         let model = 'vertical_translation';
@@ -1401,13 +1380,11 @@ async function startCalculation() {
         // 显示计算结果
         displayCalculationResults(results);
         
-        updateCalculationStatus('计算完成');
         showMessage('计算完成', 'success');
         
     } catch (error) {
         console.error('计算失败:', error);
         showMessage('计算失败: ' + error.message, 'error');
-        updateCalculationStatus('计算失败');
     } finally {
         showLoading(false);
     }
@@ -2078,13 +2055,6 @@ function showLoading(show) {
             calculateBtn.innerHTML = '<i class="fas fa-play"></i> 开始计算';
             calculateBtn.disabled = false;
         }
-    }
-}
-
-function updateCalculationStatus(status) {
-    const statusElement = document.getElementById('calcStatus');
-    if (statusElement) {
-        statusElement.textContent = status;
     }
 }
 
