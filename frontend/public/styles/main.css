@@ -439,7 +439,7 @@ header {
     flex: 1;
     overflow: auto;
     max-height: 400px;
-    border: 2px solid rgba(255, 255, 255, 0.7);
+    border: 2px solid #d3d3d3;
     border-radius: var(--radius-md);
     margin: 20px;
     background: rgba(255, 255, 255, 0.4);
@@ -470,7 +470,7 @@ header {
     background: rgba(255, 255, 255, 0.5);
     border-radius: var(--radius-md);
     overflow: hidden;
-    border: 2px solid rgba(255, 255, 255, 0.7);
+    border: 2px solid #d3d3d3;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
@@ -485,8 +485,8 @@ header {
     text-align: center;
     font-weight: 600;
     font-size: 13px;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.8);
-    border-right: 1px solid rgba(255, 255, 255, 0.4);
+    border-bottom: 2px solid #d3d3d3;
+    border-right: 1px solid #d3d3d3;
     position: sticky;
     top: 0;
     z-index: 10;
@@ -500,8 +500,8 @@ header {
 
 .data-table td {
     padding: 12px 8px;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.6);
-    border-right: 1px solid rgba(255, 255, 255, 0.4);
+    border-bottom: 2px solid #d3d3d3;
+    border-right: 1px solid #d3d3d3;
     font-size: 13px;
     text-align: center;
     vertical-align: middle;
@@ -909,29 +909,6 @@ header {
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     font-size: 14px;
-}
-
-/* 状态栏 */
-.status-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 20px;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border-top: 1px solid var(--border-color);
-    font-size: 13px;
-    color: var(--text-secondary);
-}
-
-.status-left {
-    display: flex;
-    gap: 15px;
-}
-
-.status-right {
-    display: flex;
-    gap: 15px;
-    align-items: center;
 }
 
 /* 加载动画 */
