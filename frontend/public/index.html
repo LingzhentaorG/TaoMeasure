@@ -868,43 +868,6 @@
                 <button class="modal-close" onclick="closeModal('xyzToBLHSettingsModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <!-- 通用参数 -->
-                <div class="param-group">
-                    <h4><i class="fas fa-cog"></i> 通用参数</h4>
-                    <div class="param-row">
-                        <label class="param-label">观测点权重:</label>
-                        <select class="param-input" name="weight_type">
-                            <option value="equal">等权（默认）</option>
-                            <option value="unequal" disabled>不等权（暂不开发）</option>
-                        </select>
-                    </div>
-                    <div class="param-row">
-                        <label class="param-label">高程异常小数位:</label>
-                        <input type="number" class="param-input" name="height_anomaly_decimals" value="3" min="1" max="6">
-                    </div>
-                    <div class="param-row">
-                        <label class="param-label">坐标小数位:</label>
-                        <input type="number" class="param-input" name="coordinate_decimals" value="3" min="1" max="6">
-                    </div>
-                    <div class="param-row">
-                        <label class="param-label">坐标系:</label>
-                        <select class="param-input" name="coordinate_system">
-                            <option value="WGS84">WGS84（默认）</option>
-                            <option value="CGCS2000">CGCS2000</option>
-                            <option value="Beijing54">北京54</option>
-                            <option value="Xian80">西安80</option>
-                            <option value="custom">自定义</option>
-                        </select>
-                    </div>
-                    <div class="param-row custom-ellipsoid" style="display: none;">
-                        <label class="param-label">椭球长半轴(m):</label>
-                        <input type="number" class="param-input" name="semi_major_axis" value="6378137" step="0.001">
-                    </div>
-                    <div class="param-row custom-ellipsoid" style="display: none;">
-                        <label class="param-label">扁率分母(1/f):</label>
-                        <input type="number" class="param-input" name="flattening_denominator" value="298.257222101" step="0.000000001">
-                    </div>
-                </div>
 
                 <!-- 模型说明 -->
                 <div class="param-group">
