@@ -150,9 +150,7 @@
                                 <button class="tool-btn" id="importKnownBtn"><i class="fas fa-upload"></i> 导入已知点</button>
                                 <button class="tool-btn" id="importUnknownBtn"><i class="fas fa-upload"></i> 导入未知点</button>
                                 <button class="tool-btn primary" id="calculateBtn"><i class="fas fa-play"></i> 开始计算</button>
-                                <button class="tool-btn" id="tableSettingsBtn"><i class="fas fa-table"></i> 表格设置</button>
                                 <button class="tool-btn" id="exportBtn"><i class="fas fa-download"></i> 结果导出</button>
-                                <button class="tool-btn" id="switchToGraphBtn"><i class="fas fa-chart-area"></i> 切换到图形界面</button>
                             </div>
 
                             <!-- 选项卡 -->
@@ -223,21 +221,6 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="canvas-container">
-                            <div class="canvas-toolbar">
-                                <button class="canvas-btn" id="zoomInBtn"><i class="fas fa-search-plus"></i></button>
-                                <button class="canvas-btn" id="zoomOutBtn"><i class="fas fa-search-minus"></i></button>
-                                <button class="canvas-btn" id="fitBtn"><i class="fas fa-expand-arrows-alt"></i></button>
-                                <button class="canvas-btn" id="resetViewBtn"><i class="fas fa-undo"></i></button>
-                                <button class="canvas-btn" id="measureDistBtn"><i class="fas fa-ruler"></i></button>
-                                <button class="canvas-btn" id="measureAngleBtn"><i class="fas fa-drafting-compass"></i></button>
-                                <button class="canvas-btn" id="annotateBtn"><i class="fas fa-font"></i></button>
-                                <button class="canvas-btn" id="saveCanvasBtn"><i class="fas fa-save"></i></button>
-                            </div>
-                            <div class="canvas-content">
-                                <canvas id="mainCanvas" class="canvas-canvas" width="800" height="600"></canvas>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -265,7 +248,6 @@
                                 <button class="tool-btn" data-action="import-data"><i class="fas fa-file-import"></i> 导入数据</button>
                                 <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
                                 <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
-                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
                                 <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
                             </div>
                         </div>
@@ -329,7 +311,6 @@
                                 <button class="tool-btn" data-action="import-data"><i class="fas fa-file-import"></i> 导入数据</button>
                                 <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
                                 <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
-                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
                                 <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
                             </div>
                         </div>
@@ -393,7 +374,6 @@
                                 <button class="tool-btn" data-action="import-data"><i class="fas fa-file-import"></i> 导入数据</button>
                                 <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
                                 <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
-                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
                                 <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
                             </div>
                         </div>
@@ -456,7 +436,6 @@
                                 <button class="tool-btn" data-action="import-data"><i class="fas fa-file-import"></i> 导入数据</button>
                                 <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
                                 <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
-                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
                                 <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
                             </div>
                         </div>
@@ -520,7 +499,6 @@
                                 <button class="tool-btn" data-action="import-data"><i class="fas fa-file-import"></i> 导入数据</button>
                                 <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
                                 <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
-                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
                                 <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
                             </div>
                         </div>
@@ -569,7 +547,6 @@
                                 <button class="tool-btn" data-action="import-data"><i class="fas fa-file-import"></i> 导入数据</button>
                                 <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
                                 <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
-                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
                                 <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
                             </div>
                         </div>
@@ -621,7 +598,6 @@
                                 <button class="tool-btn" data-action="import-common-points"><i class="fas fa-file-import"></i> 导入公共点</button>
                                 <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
                                 <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
-                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
                                 <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
                             </div>
                         </div>
@@ -733,7 +709,6 @@
                                 <button class="tool-btn" data-action="import-common-points"><i class="fas fa-file-import"></i> 导入公共点</button>
                                 <button class="tool-btn" data-action="settings"><i class="fas fa-cog"></i> 计算方案</button>
                                 <button class="tool-btn primary" data-action="calculate"><i class="fas fa-calculator"></i> 开始计算</button>
-                                <button class="tool-btn" data-action="table-settings"><i class="fas fa-table"></i> 表格设置</button>
                                 <button class="tool-btn" data-action="export-result"><i class="fas fa-file-export"></i> 导出成果</button>
                             </div>
                         </div>
@@ -1263,57 +1238,6 @@ GPS02 23°11′15″ 114°06′10″ 86.123 28.523</pre>
             </div>
             <div class="modal-footer">
                 <button class="tool-btn" onclick="closeModal('importModal')">关闭</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 表格设置模态框 -->
-    <div class="modal" id="tableSettingsModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>表格设置</h3>
-                <button class="modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="param-group">
-                    <h4>显示设置</h4>
-                    <div class="param-row">
-                        <label class="param-label">字体大小:</label>
-                        <select class="param-input" name="font_size">
-                            <option value="12">12px</option>
-                            <option value="14" selected>14px（默认）</option>
-                            <option value="16">16px</option>
-                            <option value="18">18px</option>
-                        </select>
-                    </div>
-                    <div class="param-row">
-                        <label class="param-label">行高:</label>
-                        <select class="param-input" name="row_height">
-                            <option value="compact">紧凑</option>
-                            <option value="normal" selected>标准（默认）</option>
-                            <option value="loose">宽松</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="param-group">
-                    <h4>打印设置</h4>
-                    <div class="param-row">
-                        <label class="param-label">页边距(mm):</label>
-                        <input type="number" class="param-input" name="page_margin" value="20" min="10" max="50">
-                    </div>
-                    <div class="param-row">
-                        <label class="param-label">页面方向:</label>
-                        <select class="param-input" name="page_orientation">
-                            <option value="portrait">纵向</option>
-                            <option value="landscape" selected>横向（默认）</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="tool-btn" onclick="closeModal('tableSettingsModal')">取消</button>
-                <button class="tool-btn primary" id="saveTableSettingsBtn">确定</button>
             </div>
         </div>
     </div>

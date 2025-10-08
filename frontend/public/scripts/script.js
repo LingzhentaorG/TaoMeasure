@@ -115,9 +115,7 @@ function initializeEventListeners() {
     
     // 表格操作按钮
     setupTableButtons();
-    
-    // 画布工具按钮
-    setupCanvasButtons();
+   
     
     // 模态框
     setupModals();
@@ -172,14 +170,6 @@ function setupToolbarButtons() {
         });
     }
     
-    // 表格设置按钮
-    const tableSettingsBtn = document.getElementById('tableSettingsBtn');
-    if (tableSettingsBtn) {
-        tableSettingsBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            openTableSettings();
-        });
-    }
     
     // 结果导出按钮
     const exportBtn = document.getElementById('exportBtn');
@@ -187,15 +177,6 @@ function setupToolbarButtons() {
         exportBtn.addEventListener('click', function(e) {
             e.preventDefault();
             exportResults();
-        });
-    }
-    
-    // 切换到图形界面按钮
-    const switchToGraphBtn = document.getElementById('switchToGraphBtn');
-    if (switchToGraphBtn) {
-        switchToGraphBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            switchToGraphInterface();
         });
     }
 }
@@ -249,32 +230,7 @@ function setupTableButtons() {
     }
 }
 
-function setupCanvasButtons() {
-    // 画布操作按钮 - 只在画布存在时设置
-    const canvas = document.getElementById('mainCanvas');
-    if (!canvas) return;
-    
-    const canvasButtons = {
-        'zoomInBtn': () => console.log('放大'),
-        'zoomOutBtn': () => console.log('缩小'),
-        'fitBtn': () => console.log('适应窗口'),
-        'resetViewBtn': () => console.log('重置视图'),
-        'measureDistBtn': () => console.log('测距'),
-        'measureAngleBtn': () => console.log('测角'),
-        'annotateBtn': () => console.log('标注'),
-        'saveCanvasBtn': () => saveCanvas()
-    };
-    
-    Object.entries(canvasButtons).forEach(([id, handler]) => {
-        const btn = document.getElementById(id);
-        if (btn) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                handler();
-            });
-        }
-    });
-}
+
 
 function setupModals() {
     // 模态框关闭按钮
@@ -1445,9 +1401,6 @@ async function startCalculation() {
         // 显示计算结果
         displayCalculationResults(results);
         
-        // 更新画布
-        updateCanvas(results);
-        
         updateCalculationStatus('计算完成');
         showMessage('计算完成', 'success');
         
@@ -1817,27 +1770,6 @@ function openTableSettings() {
     }
 }
 
-function saveTableSettings() {
-    // 收集表格设置
-    const settings = {};
-    const modal = document.getElementById('tableSettingsModal');
-    
-    if (modal) {
-        const inputs = modal.querySelectorAll('input, select');
-        inputs.forEach(input => {
-            if (input.name) {
-                settings[input.name] = input.value;
-            }
-        });
-        
-        // 应用设置
-        applyTableSettings(settings);
-        
-        closeModal('tableSettingsModal');
-        showMessage('表格设置已保存', 'success');
-    }
-}
-
 function applyTableSettings(settings) {
     const tables = document.querySelectorAll('.data-table');
     
@@ -1993,27 +1925,6 @@ function downloadFile(content, filename, mimeType) {
     URL.revokeObjectURL(url);
 }
 
-function switchToGraphInterface() {
-    // 切换到画布视图
-    showMessage('图形界面功能开发中...', 'info');
-}
-
-function updateCanvas(results) {
-    const canvas = document.getElementById('mainCanvas');
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    
-    // 清空画布
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // 绘制网格
-    drawGrid(ctx, canvas.width, canvas.height);
-    
-    // 绘制点位（简单示例）
-    drawPoints(ctx, results);
-}
-
 function drawGrid(ctx, width, height) {
     ctx.strokeStyle = '#e0e0e0';
     ctx.lineWidth = 1;
@@ -2083,19 +1994,6 @@ function drawPoints(ctx, results) {
         ctx.fillText(point.name, x + 10, y - 10);
         ctx.fillStyle = '#3498db';
     });
-}
-
-function saveCanvas() {
-    const canvas = document.getElementById('mainCanvas');
-    if (!canvas) return;
-    
-    // 创建下载链接
-    const link = document.createElement('a');
-    link.download = `GPS高程转换图形_${new Date().toISOString().slice(0, 10)}.png`;
-    link.href = canvas.toDataURL();
-    link.click();
-    
-    showMessage('画布已保存为图片', 'success');
 }
 
 // 初始化默认设置
