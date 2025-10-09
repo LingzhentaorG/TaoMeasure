@@ -188,13 +188,6 @@ function updateReferencePointOptions() {
 function collectLinearFittingSettings(modal) {
     const settings = {};
     
-    // 通用参数
-    settings.weight_type = modal.querySelector('select[name="weight_type"]')?.value || 'equal';
-    settings.height_anomaly_decimals = parseInt(modal.querySelector('input[name="height_anomaly_decimals"]')?.value) || 3;
-    settings.coefficient_decimals = parseInt(modal.querySelector('input[name="coefficient_decimals"]')?.value) || 4;
-    settings.coordinate_decimals = parseInt(modal.querySelector('input[name="coordinate_decimals"]')?.value) || 3;
-    settings.coordinate_system = modal.querySelector('select[name="coordinate_system"]')?.value || 'WGS84';
-    
     // 线性模型专属参数
     settings.central_meridian_type = modal.querySelector('select[name="central_meridian_type"]')?.value || 'auto';
     if (settings.central_meridian_type === 'manual') {
@@ -222,13 +215,6 @@ function collectLinearFittingSettings(modal) {
 // 收集面基函数拟合设置
 function collectSurfaceFittingSettings(modal) {
     const settings = {};
-    
-    // 通用参数
-    settings.weight_type = modal.querySelector('select[name="weight_type"]')?.value || 'equal';
-    settings.height_anomaly_decimals = parseInt(modal.querySelector('input[name="height_anomaly_decimals"]')?.value) || 3;
-    settings.coefficient_decimals = parseInt(modal.querySelector('input[name="coefficient_decimals"]')?.value) || 4;
-    settings.coordinate_decimals = parseInt(modal.querySelector('input[name="coordinate_decimals"]')?.value) || 3;
-    settings.coordinate_system = modal.querySelector('select[name="coordinate_system"]')?.value || 'WGS84';
     
     // 面拟合专属参数
     settings.reference_point_type = modal.querySelector('select[name="reference_point_type"]')?.value || 'auto';

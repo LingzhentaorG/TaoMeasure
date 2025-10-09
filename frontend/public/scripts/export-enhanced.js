@@ -1,11 +1,11 @@
 /**
  * 增强的导出功能模块
- * 支持多种格式：TXT、DAT、Excel、Word、DXF
+ * 支持多种格式：TXT、DAT、Excel、Word
  */
 
 class ExportManager {
     constructor() {
-        this.supportedFormats = ['txt', 'dat', 'csv', 'excel', 'word', 'dxf'];
+        this.supportedFormats = ['txt', 'dat', 'csv', 'excel', 'word'];
         this.initializeExportModal();
     }
 
@@ -69,14 +69,6 @@ class ExportManager {
                                         <small>Microsoft Word格式</small>
                                     </span>
                                 </label>
-                                <label class="format-option">
-                                    <input type="radio" name="exportFormat" value="dxf">
-                                    <span class="format-label">
-                                        <i class="fas fa-drafting-compass"></i>
-                                        <strong>DXF图形</strong>
-                                        <small>AutoCAD交换格式</small>
-                                    </span>
-                                </label>
                             </div>
                         </div>
 
@@ -106,9 +98,19 @@ class ExportManager {
                                     <label>小数位数:</label>
                                     <select id="decimalPlaces">
                                         <option value="2">2位</option>
-                                        <option value="3" selected>3位</option>
+                                        <option value="3">3位</option>
                                         <option value="4">4位</option>
-                                        <option value="5">5位</option>
+                                        <option value="5" selected>5位</option>
+                                    </select>
+                                </div>
+                                <div class="param-row">
+                                    <label>拟合系数小数位:</label>
+                                    <select id="fittingCoefficientDecimalPlaces">
+                                        <option value="6">6位</option>
+                                        <option value="8">8位</option>
+                                        <option value="10">10位</option>
+                                        <option value="12" selected>12位</option>
+                                        <option value="15">15位</option>
                                     </select>
                                 </div>
                             </div>
@@ -154,6 +156,7 @@ class ExportManager {
             const fileName = document.getElementById('exportFileName').value || 'GPS高程转换结果';
             const includeTimestamp = document.getElementById('includeTimestamp').checked;
             const decimalPlaces = parseInt(document.getElementById('decimalPlaces').value);
+            const fittingCoefficientDecimalPlaces = parseInt(document.getElementById('fittingCoefficientDecimalPlaces').value);
 
             // 获取导出内容选项
             const contentOptions = {
@@ -175,22 +178,19 @@ class ExportManager {
             // 根据格式执行导出
             switch (format) {
                 case 'txt':
-                    this.exportToTxt(finalFileName, contentOptions, decimalPlaces);
+                    this.exportToTxt(finalFileName, contentOptions, decimalPlaces, fittingCoefficientDecimalPlaces);
                     break;
                 case 'dat':
-                    this.exportToDat(finalFileName, contentOptions, decimalPlaces);
+                    this.exportToDat(finalFileName, contentOptions, decimalPlaces, fittingCoefficientDecimalPlaces);
                     break;
                 case 'csv':
-                    this.exportToCsv(finalFileName, contentOptions, decimalPlaces);
+                    this.exportToCsv(finalFileName, contentOptions, decimalPlaces, fittingCoefficientDecimalPlaces);
                     break;
                 case 'excel':
-                    this.exportToExcel(finalFileName, contentOptions, decimalPlaces);
+                    this.exportToExcel(finalFileName, contentOptions, decimalPlaces, fittingCoefficientDecimalPlaces);
                     break;
                 case 'word':
-                    this.exportToWord(finalFileName, contentOptions, decimalPlaces);
-                    break;
-                case 'dxf':
-                    this.exportToDxf(finalFileName, contentOptions, decimalPlaces);
+                    this.exportToWord(finalFileName, contentOptions, decimalPlaces, fittingCoefficientDecimalPlaces);
                     break;
                 default:
                     throw new Error('不支持的导出格式');
@@ -252,7 +252,7 @@ class ExportManager {
     /**
      * 导出为TXT格式
      */
-    exportToTxt(fileName, contentOptions, decimalPlaces) {
+    exportToTxt(fileName, contentOptions, decimalPlaces, fittingCoefficientDecimalPlaces) {
         const data = this.collectExportData(contentOptions, decimalPlaces);
         let content = '';
 
@@ -281,8 +281,8 @@ class ExportManager {
             data.knownPoints.forEach(point => {
                 const normalHeight = point.H - point.anomaly;
                 content += `${point.name.padEnd(12)}${point.lat.toFixed(6).padEnd(15)}${point.lon.toFixed(6).padEnd(15)}` +
-                          `${point.H.toFixed(decimalPlaces).padEnd(12)}${point.anomaly.toFixed(decimalPlaces).padEnd(12)}` +
-                          `${normalHeight.toFixed(decimalPlaces).padEnd(12)}${(point.remark || '').padEnd(10)}\n`;
+                          `${point.H.toFixed(decimalPlaces).padEnd(12)}${point.anomaly.toFixed(5).padEnd(12)}` +
+                          `${normalHeight.toFixed(5).padEnd(12)}${(point.remark || '').padEnd(10)}\n`;
             });
             content += '\n';
         }
@@ -298,7 +298,7 @@ class ExportManager {
             
             data.calculationResults.data.forEach(result => {
                 content += `${result.name.padEnd(12)}${result.lat.toFixed(6).padEnd(15)}${result.lon.toFixed(6).padEnd(15)}` +
-                          `${result.H.toFixed(decimalPlaces).padEnd(12)}${result.calculated_anomaly.toFixed(decimalPlaces).padEnd(15)}` +
+                          `${result.H.toFixed(decimalPlaces).padEnd(12)}${result.calculated_anomaly.toFixed(5).padEnd(15)}` +
                           `${result.normal_height.toFixed(decimalPlaces).padEnd(12)}\n`;
             });
             content += '\n';
@@ -321,9 +321,48 @@ class ExportManager {
             content += '-'.repeat(60) + '\n';
             content += '拟合参数\n';
             content += '-'.repeat(60) + '\n';
-            Object.entries(data.calculationResults.parameters).forEach(([key, value]) => {
-                content += `${key}: ${typeof value === 'number' ? value.toFixed(decimalPlaces) : value}\n`;
-            });
+            
+            const parameters = data.calculationResults.parameters;
+            
+            // 模型类型
+            if (parameters['模型类型']) {
+                content += `模型类型: ${parameters['模型类型']}\n`;
+            }
+            
+            // 拟合系数
+            if (parameters['拟合系数']) {
+                content += '拟合系数:\n';
+                Object.entries(parameters['拟合系数']).forEach(([key, value]) => {
+                    if (value !== null && value !== undefined) {
+                        content += `  ${key}: ${typeof value === 'number' ? value.toFixed(fittingCoefficientDecimalPlaces) : value}\n`;
+                    }
+                });
+            }
+            
+            // 其他参数
+            if (parameters['平均高程异常'] !== undefined) {
+                content += `平均高程异常: ${parameters['平均高程异常'].toFixed(5)}m\n`;
+            }
+            if (parameters['线路方位角'] !== undefined) {
+                content += `线路方位角: ${parameters['线路方位角'].toFixed(decimalPlaces)}°\n`;
+            }
+            if (parameters['参考点坐标'] !== undefined) {
+                const coords = parameters['参考点坐标'];
+                // 检查是否包含"纬度 B₀"和"经度 L₀"（新格式）
+                if (coords['纬度 B₀'] !== undefined && coords['经度 L₀'] !== undefined) {
+                    content += `参考点坐标: 纬度 B₀: ${coords['纬度 B₀']?.toFixed(6)}°, 经度 L₀: ${coords['经度 L₀']?.toFixed(6)}°\n`;
+                } else {
+                    // 使用旧格式
+                    content += `参考点坐标: 纬度 ${coords.纬度?.toFixed(6) || coords.lat?.toFixed(6)}°, 经度 ${coords.经度?.toFixed(6) || coords.lon?.toFixed(6)}°\n`;
+                }
+            }
+            if (parameters['已知点数量'] !== undefined) {
+                content += `已知点数量: ${parameters['已知点数量']}个\n`;
+            }
+            if (parameters['未知点数量'] !== undefined) {
+                content += `未知点数量: ${parameters['未知点数量']}个\n`;
+            }
+            
             content += '\n';
         }
 
@@ -333,7 +372,7 @@ class ExportManager {
     /**
      * 导出为DAT格式
      */
-    exportToDat(fileName, contentOptions, decimalPlaces) {
+    exportToDat(fileName, contentOptions, decimalPlaces, fittingCoefficientDecimalPlaces) {
         const data = this.collectExportData(contentOptions, decimalPlaces);
         let content = '';
 
@@ -350,8 +389,8 @@ class ExportManager {
             data.knownPoints.forEach(point => {
                 const normalHeight = point.H - point.anomaly;
                 content += `${point.name},${point.lat.toFixed(6)},${point.lon.toFixed(6)},` +
-                          `${point.H.toFixed(decimalPlaces)},${point.anomaly.toFixed(decimalPlaces)},` +
-                          `${normalHeight.toFixed(decimalPlaces)},KNOWN\n`;
+                          `${point.H.toFixed(decimalPlaces)},${point.anomaly.toFixed(5)},` +
+                          `${normalHeight.toFixed(5)},KNOWN\n`;
             });
         }
 
@@ -360,7 +399,7 @@ class ExportManager {
             content += `# 未知点计算结果\n`;
             data.calculationResults.data.forEach(result => {
                 content += `${result.name},${result.lat.toFixed(6)},${result.lon.toFixed(6)},` +
-                          `${result.H.toFixed(decimalPlaces)},${result.calculated_anomaly.toFixed(decimalPlaces)},` +
+                          `${result.H.toFixed(decimalPlaces)},${result.calculated_anomaly.toFixed(5)},` +
                           `${result.normal_height.toFixed(decimalPlaces)},UNKNOWN\n`;
             });
         }
@@ -371,8 +410,8 @@ class ExportManager {
     /**
      * 导出为CSV格式
      */
-    exportToCsv(fileName, contentOptions, decimalPlaces) {
-        const data = this.collectExportData(contentOptions, decimalPlaces);
+    exportToCsv(fileName, contentOptions, decimalPlaces, fittingCoefficientDecimalPlaces) {
+        const data = this.collectExportData(contentOptions, decimalPlaces, fittingCoefficientDecimalPlaces);
         const csvData = [];
 
         // 项目信息
@@ -397,8 +436,8 @@ class ExportManager {
                     point.lat.toFixed(6),
                     point.lon.toFixed(6),
                     point.H.toFixed(decimalPlaces),
-                    point.anomaly.toFixed(decimalPlaces),
-                    normalHeight.toFixed(decimalPlaces),
+                    point.anomaly.toFixed(5),
+                     normalHeight.toFixed(5),
                     point.remark || ''
                 ]);
             });
@@ -415,7 +454,7 @@ class ExportManager {
                     result.lat.toFixed(6),
                     result.lon.toFixed(6),
                     result.H.toFixed(decimalPlaces),
-                    result.calculated_anomaly.toFixed(decimalPlaces),
+                    result.calculated_anomaly.toFixed(5),
                     result.normal_height.toFixed(decimalPlaces)
                 ]);
             });
@@ -428,8 +467,8 @@ class ExportManager {
     /**
      * 导出为Excel格式（HTML表格格式）
      */
-    exportToExcel(fileName, contentOptions, decimalPlaces) {
-        const data = this.collectExportData(contentOptions, decimalPlaces);
+    exportToExcel(fileName, contentOptions, decimalPlaces, fittingCoefficientDecimalPlaces) {
+        const data = this.collectExportData(contentOptions, decimalPlaces, fittingCoefficientDecimalPlaces);
         let htmlContent = `
             <html>
             <head>
@@ -478,8 +517,8 @@ class ExportManager {
                         <td>${point.lat.toFixed(6)}</td>
                         <td>${point.lon.toFixed(6)}</td>
                         <td>${point.H.toFixed(decimalPlaces)}</td>
-                        <td>${point.anomaly.toFixed(decimalPlaces)}</td>
-                        <td>${normalHeight.toFixed(decimalPlaces)}</td>
+                        <td>${point.anomaly.toFixed(5)}</td>
+                        <td>${normalHeight.toFixed(5)}</td>
                         <td>${point.remark || ''}</td>
                     </tr>
                 `;
@@ -505,7 +544,7 @@ class ExportManager {
                         <td>${result.lat.toFixed(6)}</td>
                         <td>${result.lon.toFixed(6)}</td>
                         <td>${result.H.toFixed(decimalPlaces)}</td>
-                        <td>${result.calculated_anomaly.toFixed(decimalPlaces)}</td>
+                        <td>${result.calculated_anomaly.toFixed(5)}</td>
                         <td>${result.normal_height.toFixed(decimalPlaces)}</td>
                     </tr>
                 `;
@@ -520,8 +559,8 @@ class ExportManager {
     /**
      * 导出为Word格式（HTML格式）
      */
-    exportToWord(fileName, contentOptions, decimalPlaces) {
-        const data = this.collectExportData(contentOptions, decimalPlaces);
+    exportToWord(fileName, contentOptions, decimalPlaces, fittingCoefficientDecimalPlaces) {
+        const data = this.collectExportData(contentOptions, decimalPlaces, fittingCoefficientDecimalPlaces);
         let htmlContent = `
             <html>
             <head>
@@ -576,8 +615,8 @@ class ExportManager {
                         <td>${point.lat.toFixed(6)}</td>
                         <td>${point.lon.toFixed(6)}</td>
                         <td>${point.H.toFixed(decimalPlaces)}</td>
-                        <td>${point.anomaly.toFixed(decimalPlaces)}</td>
-                        <td>${normalHeight.toFixed(decimalPlaces)}</td>
+                        <td>${point.anomaly.toFixed(5)}</td>
+                        <td>${normalHeight.toFixed(5)}</td>
                         <td>${point.remark || ''}</td>
                     </tr>
                 `;
@@ -603,7 +642,7 @@ class ExportManager {
                         <td>${result.lat.toFixed(6)}</td>
                         <td>${result.lon.toFixed(6)}</td>
                         <td>${result.H.toFixed(decimalPlaces)}</td>
-                        <td>${result.calculated_anomaly.toFixed(decimalPlaces)}</td>
+                        <td>${result.calculated_anomaly.toFixed(5)}</td>
                         <td>${result.normal_height.toFixed(decimalPlaces)}</td>
                     </tr>
                 `;
@@ -625,163 +664,61 @@ class ExportManager {
             `;
         }
 
+        // 拟合参数
+        if (contentOptions.fittingParams && data.calculationResults.parameters) {
+            htmlContent += `
+                <div class="subtitle">五、拟合参数</div>
+                <table class="info-table">
+            `;
+            
+            const parameters = data.calculationResults.parameters;
+            
+            // 模型类型
+            if (parameters['模型类型']) {
+                htmlContent += `<tr><td>模型类型：</td><td>${parameters['模型类型']}</td></tr>`;
+            }
+            
+            // 拟合系数
+            if (parameters['拟合系数']) {
+                Object.entries(parameters['拟合系数']).forEach(([key, value]) => {
+                    if (value !== null && value !== undefined) {
+                        htmlContent += `<tr><td>${key}：</td><td>${typeof value === 'number' ? value.toFixed(fittingCoefficientDecimalPlaces) : value}</td></tr>`;
+                    }
+                });
+            }
+            
+            // 其他参数
+            if (parameters['平均高程异常'] !== undefined) {
+                htmlContent += `<tr><td>平均高程异常：</td><td>${parameters['平均高程异常'].toFixed(5)}m</td></tr>`;
+            }
+            if (parameters['线路方位角'] !== undefined) {
+                htmlContent += `<tr><td>线路方位角：</td><td>${parameters['线路方位角'].toFixed(decimalPlaces)}°</td></tr>`;
+            }
+            if (parameters['参考点坐标'] !== undefined) {
+                const coords = parameters['参考点坐标'];
+                // 检查是否包含"纬度 B₀"和"经度 L₀"（新格式）
+                if (coords['纬度 B₀'] !== undefined && coords['经度 L₀'] !== undefined) {
+                    htmlContent += `<tr><td>参考点坐标：</td><td>纬度 B₀: ${coords['纬度 B₀']?.toFixed(6)}°, 经度 L₀: ${coords['经度 L₀']?.toFixed(6)}°</td></tr>`;
+                } else {
+                    // 使用旧格式
+                    htmlContent += `<tr><td>参考点坐标：</td><td>纬度 ${(coords.纬度 || coords.lat)?.toFixed(6)}°, 经度 ${(coords.经度 || coords.lon)?.toFixed(6)}°</td></tr>`;
+                }
+            }
+            if (parameters['已知点数量'] !== undefined) {
+                htmlContent += `<tr><td>已知点数量：</td><td>${parameters['已知点数量']}个</td></tr>`;
+            }
+            if (parameters['未知点数量'] !== undefined) {
+                htmlContent += `<tr><td>未知点数量：</td><td>${parameters['未知点数量']}个</td></tr>`;
+            }
+            
+            htmlContent += '</table>';
+        }
+
         htmlContent += '</body></html>';
         this.downloadFile(htmlContent, `${fileName}.doc`, 'application/msword;charset=utf-8');
     }
 
-    /**
-     * 导出为DXF格式
-     */
-    exportToDxf(fileName, contentOptions, decimalPlaces) {
-        const data = this.collectExportData(contentOptions, decimalPlaces);
-        
-        // DXF文件头部
-        let dxfContent = `0
-SECTION
-2
-HEADER
-9
-$ACADVER
-1
-AC1015
-0
-ENDSEC
-0
-SECTION
-2
-TABLES
-0
-TABLE
-2
-LAYER
-70
-1
-0
-LAYER
-2
-GPS_KNOWN
-70
-0
-62
-1
-6
-CONTINUOUS
-0
-LAYER
-2
-GPS_UNKNOWN
-70
-0
-62
-2
-6
-CONTINUOUS
-0
-LAYER
-2
-TEXT
-70
-0
-62
-7
-6
-CONTINUOUS
-0
-ENDTAB
-0
-ENDSEC
-0
-SECTION
-2
-ENTITIES
-`;
 
-        // 添加已知点
-        if (contentOptions.knownPoints && data.knownPoints.length > 0) {
-            data.knownPoints.forEach(point => {
-                // 转换经纬度为近似的平面坐标（简化处理）
-                const x = point.lon * 111000; // 近似转换
-                const y = point.lat * 111000;
-                
-                // 添加点
-                dxfContent += `0
-POINT
-8
-GPS_KNOWN
-10
-${x.toFixed(3)}
-20
-${y.toFixed(3)}
-30
-${point.H.toFixed(decimalPlaces)}
-`;
-                
-                // 添加点名标注
-                dxfContent += `0
-TEXT
-8
-TEXT
-10
-${(x + 100).toFixed(3)}
-20
-${(y + 100).toFixed(3)}
-30
-${point.H.toFixed(decimalPlaces)}
-40
-200
-1
-${point.name}
-`;
-            });
-        }
-
-        // 添加未知点
-        if (contentOptions.unknownPoints && data.calculationResults.data) {
-            data.calculationResults.data.forEach(result => {
-                const x = result.lon * 111000;
-                const y = result.lat * 111000;
-                
-                // 添加点
-                dxfContent += `0
-POINT
-8
-GPS_UNKNOWN
-10
-${x.toFixed(3)}
-20
-${y.toFixed(3)}
-30
-${result.H.toFixed(decimalPlaces)}
-`;
-                
-                // 添加点名标注
-                dxfContent += `0
-TEXT
-8
-TEXT
-10
-${(x + 100).toFixed(3)}
-20
-${(y + 100).toFixed(3)}
-30
-${result.H.toFixed(decimalPlaces)}
-40
-200
-1
-${result.name}
-`;
-            });
-        }
-
-        // DXF文件尾部
-        dxfContent += `0
-ENDSEC
-0
-EOF
-`;
-
-        this.downloadFile(dxfContent, `${fileName}.dxf`, 'application/dxf');
-    }
 
     /**
      * 下载文件

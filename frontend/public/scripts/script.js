@@ -672,7 +672,7 @@ function calculateNormalHeight(row) {
         const normalHeight = ellipsoidHeight - heightAnomaly;
         const calculatedCell = row.querySelector('.calculated');
         if (calculatedCell) {
-            calculatedCell.textContent = normalHeight.toFixed(3);
+            calculatedCell.textContent = normalHeight.toFixed(5);
         }
     }
 }
@@ -1628,15 +1628,35 @@ function displayModelParameters(parameters) {
             <div class="assessment-content">
     `;
     
+    // 根据当前计算模型类型筛选显示参数
+    const currentModel = window.currentFunction || '';
+    
     Object.entries(parameters).forEach(([key, value]) => {
         let displayKey = key;
         let displayValue = value;
+        let shouldDisplay = true;
+        
+        // 根据模型类型筛选参数
+        if (currentModel === 'linearFitting') {
+            // 线性基函数拟合：不显示参考点坐标，显示线路方位角
+            if (key === '参考点坐标') {
+                shouldDisplay = false;
+            }
+        } else if (currentModel === 'surfaceFitting') {
+            // 面基函数拟合：显示参考点坐标，不显示线路方位角
+            if (key === '线路方位角') {
+                shouldDisplay = false;
+            }
+        }
+        
+        if (!shouldDisplay) return;
         
         // 格式化参数名称
         switch (key) {
             case 'mean_anomaly':
+            case '平均高程异常':
                 displayKey = '平均高程异常';
-                displayValue = typeof value === 'number' ? value.toFixed(4) + 'm' : value;
+                displayValue = typeof value === 'number' ? value.toFixed(5) + 'm' : value;
                 break;
             case 'a0':
                 displayKey = '常数项 a₀';
@@ -1649,6 +1669,50 @@ function displayModelParameters(parameters) {
             case 'a2':
                 displayKey = '二次项系数 a₂';
                 displayValue = typeof value === 'number' ? value.toFixed(8) : value;
+                break;
+            case '模型类型':
+                displayKey = '模型类型';
+                displayValue = value;
+                break;
+            case '拟合系数':
+                displayKey = '拟合系数';
+                if (typeof value === 'object' && value !== null) {
+                    displayValue = '<div style="margin-left: 10px;">';
+                    Object.entries(value).forEach(([k, v]) => {
+                        if (v !== null && v !== undefined) {
+                            displayValue += `<div>${k}: ${typeof v === 'number' ? v.toFixed(12) : v}</div>`;
+                        }
+                    });
+                    displayValue += '</div>';
+                } else {
+                    displayValue = value;
+                }
+                break;
+            case '线路方位角':
+                displayKey = '线路方位角';
+                displayValue = typeof value === 'number' ? value.toFixed(4) + '°' : value;
+                break;
+            case '参考点坐标':
+                displayKey = '参考点坐标';
+                if (typeof value === 'object' && value !== null) {
+                    // 处理新的参考点坐标格式（B₀和L₀）
+                    if (value['纬度 B₀'] !== undefined && value['经度 L₀'] !== undefined) {
+                        displayValue = `纬度 B₀: ${value['纬度 B₀']?.toFixed(6) || 'N/A'}°, 经度 L₀: ${value['经度 L₀']?.toFixed(6) || 'N/A'}°`;
+                    } else {
+                        // 兼容旧的参考点坐标格式
+                        displayValue = `纬度: ${value.纬度?.toFixed(6) || value.lat?.toFixed(6) || 'N/A'}°, 经度: ${value.经度?.toFixed(6) || value.lon?.toFixed(6) || 'N/A'}°`;
+                    }
+                } else {
+                    displayValue = value;
+                }
+                break;
+            case '已知点数量':
+                displayKey = '已知点数量';
+                displayValue = value;
+                break;
+            case '未知点数量':
+                displayKey = '未知点数量';
+                displayValue = value;
                 break;
             default:
                 displayValue = typeof value === 'number' ? value.toFixed(4) : value;
@@ -1995,20 +2059,16 @@ function initializeDefaultSettings() {
 
 function getDefaultSettings(func) {
     const defaultSettings = {
-        weight_type: 'equal',
-        height_anomaly_decimals: 5,
         coordinate_decimals: 3,
         coordinate_system: 'WGS84'
     };
     
     if (func === 'linearFitting') {
-        defaultSettings.coefficient_decimals = 4;
         defaultSettings.central_meridian_type = 'auto';
         defaultSettings.compensation_height_type = 'auto';
         defaultSettings.centerline_origin_type = 'auto';
         defaultSettings.fitting_model = 'quadratic';
     } else if (func === 'surfaceFitting') {
-        defaultSettings.coefficient_decimals = 4;
         defaultSettings.reference_point_type = 'auto';
         defaultSettings.surface_model = 'quadratic';
     }

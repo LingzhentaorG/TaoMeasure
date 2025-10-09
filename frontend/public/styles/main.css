@@ -76,7 +76,7 @@ header {
 
 .menu-bar {
     display: flex;
-    background: rgba(52, 73, 94, 0.7);
+    background: rgba(224, 228, 233, 0.7);
     padding: 0 16px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(10px);
@@ -98,7 +98,7 @@ header {
 }
 
 .menu-item.disabled {
-    color: #95a5a6;
+    color: #000000;
     cursor: not-allowed;
 }
 

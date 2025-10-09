@@ -56,7 +56,9 @@ class GPSAltitudeConverter:
             'model': 'vertical_translation',
             'results': results,
             'parameters': {
-                'avg_height_anomaly': avg_height_anomaly
+                '平均高程异常': avg_height_anomaly,
+                '已知点数量': len(known_points),
+                '未知点数量': len(unknown_points)
             },
             'unit_weight_error': unit_weight_error,
             'max_residual': max(residuals) if residuals else 0.0,
@@ -174,10 +176,15 @@ class GPSAltitudeConverter:
             'model': 'linear_basis',
             'results': results,
             'parameters': {
-                'model_type': model_type,
-                'coefficients': coefficients.tolist(),
-                'line_azimuth': line_azimuth,
-                'reference_point': {'lat': avg_lat, 'lon': avg_lon}
+                '模型类型': '线性模型' if model_type == 'linear' else '二次曲线模型',
+                '拟合系数': {
+                    '常数项 a₀': float(coefficients[0]),
+                    '一次项系数 a₁': float(coefficients[1]),
+                    '二次项系数 a₂': float(coefficients[2]) if len(coefficients) > 2 else None
+                },
+                '线路方位角': float(line_azimuth),
+                '已知点数量': len(known_points),
+                '未知点数量': len(unknown_points)
             },
             'unit_weight_error': unit_weight_error,
             'max_residual': float(np.max(residuals)) if len(residuals) > 0 else 0.0,
@@ -211,40 +218,40 @@ class GPSAltitudeConverter:
         model_type = model_params.get('model_type', 'quadratic')
         coordinate_system = model_params.get('coordinate_system', 'WGS84')
         
-        # 建立平面坐标系
-        # 1. 计算测区中心点
-        avg_lat = np.mean([point['lat'] for point in known_points])
-        avg_lon = np.mean([point['lon'] for point in known_points])
+        # 建立参考点坐标系
+        # 1. 计算测区参考点（B₀和L₀）
+        ref_lat = np.mean([point['lat'] for point in known_points])
+        ref_lon = np.mean([point['lon'] for point in known_points])
         
-        # 2. 转换到平面坐标系（简化投影）
-        x_coords = []
-        y_coords = []
+        # 2. 计算各点相对于参考点的大地经纬度差值
+        delta_B_coords = []
+        delta_L_coords = []
         for point in known_points:
-            # 简化的投影变换
-            x = (point['lon'] - avg_lon) * np.pi / 180 * 6371000 * np.cos(avg_lat * np.pi / 180)
-            y = (point['lat'] - avg_lat) * np.pi / 180 * 6371000
-            x_coords.append(x)
-            y_coords.append(y)
+            # 计算大地经纬度差值（单位：度）
+            delta_B = point['lat'] - ref_lat
+            delta_L = point['lon'] - ref_lon
+            delta_B_coords.append(delta_B)
+            delta_L_coords.append(delta_L)
         
         # 3. 建立拟合方程
         height_anomalies = [point['anomaly'] for point in known_points]
         
-        if model_type == 'linear':
-            # 线性模型: ζ = a₀ + a₁x + a₂y
+        if model_type == 'plane':
+            # 平面模型: ζ = a₀ + a₁ΔB + a₂ΔL
             A_fit = np.column_stack([
-                np.ones(len(x_coords)),
-                x_coords,
-                y_coords
+                np.ones(len(delta_B_coords)),
+                delta_B_coords,
+                delta_L_coords
             ])
         elif model_type == 'quadratic':
-            # 二次模型: ζ = a₀ + a₁x + a₂y + a₃x² + a₄xy + a₅y²
+            # 二次模型: ζ = a₀ + a₁ΔB + a₂ΔB² + a₃ΔL + a₄ΔL² + a₅ΔLΔB
             A_fit = np.column_stack([
-                np.ones(len(x_coords)),
-                x_coords,
-                y_coords,
-                np.array(x_coords)**2,
-                np.array(x_coords) * np.array(y_coords),
-                np.array(y_coords)**2
+                np.ones(len(delta_B_coords)),
+                delta_B_coords,
+                np.array(delta_B_coords)**2,
+                delta_L_coords,
+                np.array(delta_L_coords)**2,
+                np.array(delta_L_coords) * np.array(delta_B_coords)
             ])
         else:
             return {'error': f'不支持的模型类型: {model_type}'}
@@ -266,16 +273,17 @@ class GPSAltitudeConverter:
         # 计算未知点正常高
         results = []
         for point in unknown_points:
-            # 转换未知点到平面坐标系
-            x = (point['lon'] - avg_lon) * np.pi / 180 * 6371000 * np.cos(avg_lat * np.pi / 180)
-            y = (point['lat'] - avg_lat) * np.pi / 180 * 6371000
+            # 计算未知点相对于参考点的大地经纬度差值（单位：度）
+            delta_B = point['lat'] - ref_lat
+            delta_L = point['lon'] - ref_lon
             
             # 计算高程异常
-            if model_type == 'linear':
-                calculated_anomaly = coefficients[0] + coefficients[1] * x + coefficients[2] * y
+            if model_type == 'plane':
+                calculated_anomaly = coefficients[0] + coefficients[1] * delta_B + coefficients[2] * delta_L
             elif model_type == 'quadratic':
-                calculated_anomaly = (coefficients[0] + coefficients[1] * x + coefficients[2] * y +
-                                    coefficients[3] * x**2 + coefficients[4] * x * y + coefficients[5] * y**2)
+                calculated_anomaly = (coefficients[0] + coefficients[1] * delta_B + coefficients[2] * delta_B**2 + 
+                                    coefficients[3] * delta_L + coefficients[4] * delta_L**2 + 
+                                    coefficients[5] * delta_L * delta_B)
             
             normal_height = point['H'] - calculated_anomaly
             
@@ -284,8 +292,8 @@ class GPSAltitudeConverter:
                 'lat': point['lat'],
                 'lon': point['lon'],
                 'H': point['H'],
-                'x_coord': x,
-                'y_coord': y,
+                'delta_B': delta_B,
+                'delta_L': delta_L,
                 'calculated_anomaly': calculated_anomaly,
                 'normal_height': normal_height
             })
@@ -294,9 +302,18 @@ class GPSAltitudeConverter:
             'model': 'surface_basis',
             'results': results,
             'parameters': {
-                'model_type': model_type,
-                'coefficients': coefficients.tolist(),
-                'reference_point': {'lat': avg_lat, 'lon': avg_lon}
+                '模型类型': '平面模型' if model_type == 'plane' else '平面二次模型',
+                '拟合系数': {
+                    '常数项 a₀': float(coefficients[0]),
+                    '一次项系数 a₁': float(coefficients[1]),
+                    '二次项系数 a₂': float(coefficients[2]),
+                    '一次项系数 a₃': float(coefficients[3]) if len(coefficients) > 3 else None,
+                    '二次项系数 a₄': float(coefficients[4]) if len(coefficients) > 4 else None,
+                    '交叉项系数 a₅': float(coefficients[5]) if len(coefficients) > 5 else None
+                },
+                '参考点坐标': {'纬度 B₀': float(ref_lat), '经度 L₀': float(ref_lon)},
+                '已知点数量': len(known_points),
+                '未知点数量': len(unknown_points)
             },
             'unit_weight_error': unit_weight_error,
             'max_residual': float(np.max(residuals)) if len(residuals) > 0 else 0.0,
