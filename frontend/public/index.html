@@ -24,10 +24,10 @@
 
         <!-- 菜单栏 -->
         <div class="menu-bar">
-            <div class="menu-item" onclick="fileHandler.showFileUploadDialog()">
+            <div class="menu-item disabled" onclick="fileHandler.showFileUploadDialog()">
                 <i class="fas fa-file-import"></i> 导入文件
             </div>
-            <div class="menu-item" onclick="exportManager.showExportDialog()">
+            <div class="menu-item disabled" onclick="exportManager.showExportDialog()">
                 <i class="fas fa-file-export"></i> 导出结果
             </div>
             <div class="menu-item disabled">
@@ -896,40 +896,6 @@
                 <button class="modal-close" onclick="closeModal('blhToXYZSettingsModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <!-- 通用参数 -->
-                <div class="param-group">
-                    <h4><i class="fas fa-cog"></i> 通用参数</h4>
-                    <div class="param-row">
-                        <label class="param-label">观测点权重:</label>
-                        <select class="param-input" name="weight_type">
-                            <option value="equal">等权（默认）</option>
-                            <option value="unequal" disabled>不等权（暂不开发）</option>
-                        </select>
-                    </div>
-                    <div class="param-row">
-                        <label class="param-label">高程异常小数位:</label>
-                        <input type="number" class="param-input" name="height_anomaly_decimals" value="3" min="1" max="6">
-                    </div>
-                    <div class="param-row">
-                        <label class="param-label">拟合系数小数位:</label>
-                        <input type="number" class="param-input" name="coefficient_decimals" value="4" min="1" max="8">
-                    </div>
-                    <div class="param-row">
-                        <label class="param-label">坐标小数位:</label>
-                        <input type="number" class="param-input" name="coordinate_decimals" value="3" min="1" max="6">
-                    </div>
-                    <div class="param-row">
-                        <label class="param-label">坐标系:</label>
-                        <select class="param-input" name="coordinate_system">
-                            <option value="WGS84">WGS84（默认）</option>
-                            <option value="CGCS2000">CGCS2000</option>
-                            <option value="Beijing54">北京54</option>
-                            <option value="Xian80">西安80</option>
-                            <option value="custom">自定义</option>
-                        </select>
-                    </div>
-                </div>
-
                 <!-- 线性模型专属参数 -->
                 <div class="param-group">
                     <h4><i class="fas fa-route"></i> 独立线路坐标系参数</h4>
@@ -1016,40 +982,6 @@
                 <button class="modal-close" onclick="closeModal('xyzToBLHSettingsModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <!-- 通用参数 -->
-                <div class="param-group">
-                    <h4><i class="fas fa-cog"></i> 通用参数</h4>
-                    <div class="param-row">
-                        <label class="param-label">观测点权重:</label>
-                        <select class="param-input" name="weight_type">
-                            <option value="equal">等权（默认）</option>
-                            <option value="unequal" disabled>不等权（暂不开发）</option>
-                        </select>
-                    </div>
-                    <div class="param-row">
-                        <label class="param-label">高程异常小数位:</label>
-                        <input type="number" class="param-input" name="height_anomaly_decimals" value="3" min="1" max="6">
-                    </div>
-                    <div class="param-row">
-                        <label class="param-label">拟合系数小数位:</label>
-                        <input type="number" class="param-input" name="coefficient_decimals" value="4" min="1" max="8">
-                    </div>
-                    <div class="param-row">
-                        <label class="param-label">坐标小数位:</label>
-                        <input type="number" class="param-input" name="coordinate_decimals" value="3" min="1" max="6">
-                    </div>
-                    <div class="param-row">
-                        <label class="param-label">坐标系:</label>
-                        <select class="param-input" name="coordinate_system">
-                            <option value="WGS84">WGS84（默认）</option>
-                            <option value="CGCS2000">CGCS2000</option>
-                            <option value="Beijing54">北京54</option>
-                            <option value="Xian80">西安80</option>
-                            <option value="custom">自定义</option>
-                        </select>
-                    </div>
-                </div>
-
                 <!-- 面拟合专属参数 -->
                 <div class="param-group">
                     <h4><i class="fas fa-map-marked-alt"></i> 参考点设置</h4>
