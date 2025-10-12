@@ -15,7 +15,7 @@ def health_check():
     services = current_app.extensions.get("services", {})
     module_states = {
         "gps_altitude": "available" if services.get("gps_converter") else "missing",
-        "coordinate_transform": "available" if services.get("coordinate_transformer") else "missing",
+        "coordinate_universal": "available" if services.get("coordinate_universal") else "missing",
         "curve_design": "available" if services.get("curve_designer") else "missing",
         "file_parser": "available" if services.get("file_handler") else "missing",
     }

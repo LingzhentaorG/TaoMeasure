@@ -1,637 +1,343 @@
-"""坐标系、投影与参数转换接口集合。"""
+"""REST endpoints for the universal coordinate conversion module."""
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from typing import Any, Dict, Iterable, List, Sequence, Tuple
+import math
+from typing import Any, Dict, List, Tuple
 
 from flask import current_app, jsonify, request
 
 from . import api_bp
-from taomeasure.domain import coordinate_transformations as transform_utils
+from taomeasure.domain.universal_coordinate import PointRecord, UniversalCoordinateService, parse_float
 
 logger = logging.getLogger(__name__)
 
 
-def _get_transformer():
-    """获取坐标转换服务实例。"""
-
+def _get_service() -> UniversalCoordinateService:
     services = current_app.extensions.get("services", {})
-    transformer = services.get("coordinate_transformer")
-    if transformer is None:
-        raise RuntimeError("坐标转换服务未初始化")
-    return transformer
+    service = services.get("coordinate_universal")
+    if service is None:
+        raise RuntimeError("综合坐标转换服务未初始化")
+    return service
 
 
-@api_bp.route("/coordinate-transform", methods=["POST"])
-def transform_coordinate():
-    """执行高斯正算/反算坐标转换。"""
+@api_bp.route("/coordinate/universal/metadata", methods=["GET"])
+def coordinate_metadata():
+    """Expose reference data such as known ellipsoids."""
+
+    service = _get_service()
+    return jsonify({"success": True, "data": service.get_reference_data()})
+
+
+@api_bp.route("/coordinate/universal/process", methods=["POST"])
+def coordinate_process():
+    """Main entry: fill datasets, estimate parameters, and execute conversions."""
 
     payload = request.get_json(silent=True) or {}
-    if not payload:
-        return jsonify({"success": False, "error": "未提供有效的 JSON 数据"}), 400
-
-    points = payload.get("points", [])
-    operation = payload.get("operation", payload.get("type", "forward"))
-
-    params = payload.get("params", {})
-    central_meridian = params.get("central_meridian", payload.get("central_meridian", 0))
-    projection_height = params.get("projection_height", payload.get("projection_height", 0))
-    add_500km = params.get("add_500km", payload.get("add_500km", True))
-    ellipsoid = params.get("ellipsoid", payload.get("ellipsoid", "WGS84"))
-
-    transform_type = {
-        "gauss_forward": "forward",
-        "gauss_inverse": "inverse",
-    }.get(operation, operation)
-
-    if not points:
-        return jsonify({"success": False, "error": "需至少提供一个坐标点"}), 400
+    service = _get_service()
 
     try:
-        transformer = _get_transformer()
-        transformer.set_ellipsoid(ellipsoid)
+        source_system = service.build_system(payload.get("source_system"), "source")
+        target_system = service.build_system(payload.get("target_system"), "target")
     except Exception as exc:  # noqa: BLE001
-        logger.exception("坐标转换服务初始化失败: %s", exc)
-        return jsonify({"success": False, "error": str(exc)}), 500
+        logger.exception("坐标系统参数解析失败: %s", exc)
+        return jsonify({"success": False, "error": f"坐标系统参数解析失败: {exc}"}), 400
 
-    results: List[Dict[str, Any]] = []
+    options = payload.get("options") or {}
+    auto_fill = options.get("auto_fill", True)
+    auto_parameters = options.get("auto_parameters", True)
 
-    for point in points:
+    raw_common: List[Dict[str, Any]] = payload.get("common_points") or []
+    common_pairs: List[Tuple[PointRecord, PointRecord]] = []
+    enriched_common: List[Dict[str, Any]] = []
+
+    for entry in raw_common:
+        name = entry.get("name", "")
+        src_raw = entry.get("source") or {}
+        tgt_raw = entry.get("target") or {}
+        src_point = service.build_point(src_raw, name)
+        tgt_point = service.build_point(tgt_raw, name)
+        if auto_fill:
+            src_point = service.fill_point_components(src_point, source_system)
+            tgt_point = service.fill_point_components(tgt_point, target_system)
+        enriched_common.append(
+            {"name": name, "source": src_point.to_payload(), "target": tgt_point.to_payload()}
+        )
+        common_pairs.append((src_point, tgt_point))
+
+    provided_params = payload.get("parameters") or {}
+
+    seven_input = provided_params.get("seven") or {}
+    four_input = provided_params.get("four") or {}
+
+    messages: List[str] = []
+
+    seven_solution: Dict[str, Any] = {}
+    seven_source = "none"
+    if seven_input.get("mode") == "manual":
+        seven_solution = _parse_manual_seven_parameters(seven_input)
+        seven_source = "manual"
+    elif auto_parameters:
         try:
-            name = point.get("name", "")
+            seven_solution = service.solve_seven_parameters(common_pairs)
+            seven_source = "computed"
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("七参数解算失败: %s", exc)
+            messages.append(f"七参数解算失败: {exc}")
+            seven_solution = {}
+            seven_source = "error"
+    elif seven_input:
+        seven_solution = _parse_manual_seven_parameters(seven_input)
+        seven_source = "manual"
 
-            if transform_type == "forward":
-                lat = point.get("lat") or point.get("coord1")
-                lon = point.get("lon") or point.get("coord2")
+    four_solution: Dict[str, Any] = {}
+    four_source = "none"
+    if four_input.get("mode") == "manual":
+        four_solution = _parse_manual_four_parameters(four_input)
+        four_source = "manual"
+    elif auto_parameters:
+        try:
+            four_solution = service.solve_four_parameters(common_pairs)
+            four_source = "computed"
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("四参数解算失败: %s", exc)
+            messages.append(f"四参数解算失败: {exc}")
+            four_solution = {}
+            four_source = "error"
+    elif four_input:
+        four_solution = _parse_manual_four_parameters(four_input)
+        four_source = "manual"
 
-                if isinstance(lat, str):
-                    lat = transformer.dms_to_decimal(lat)
-                if isinstance(lon, str):
-                    lon = transformer.dms_to_decimal(lon)
+    points_payload: List[Dict[str, Any]] = payload.get("points") or []
+    enriched_points: List[Dict[str, Any]] = []
+    conversion_results: List[Dict[str, Any]] = []
 
-                x, y = transformer.gauss_forward(lat, lon, central_meridian, projection_height, add_500km)
+    for raw_point in points_payload:
+        point = service.build_point(raw_point, raw_point.get("name", ""))
+        if auto_fill:
+            point = service.fill_point_components(point, source_system)
+        enriched_points.append(point.to_payload())
 
-                results.append(
-                    {
-                        "name": name,
-                        "input_lat": lat,
-                        "input_lon": lon,
-                        "output_x": x,
-                        "output_y": y,
-                        "lat_dms": transformer.decimal_to_dms(lat),
-                        "lon_dms": transformer.decimal_to_dms(lon),
-                    }
-                )
-
-            elif transform_type == "inverse":
-                x = point.get("x") or point.get("coord1")
-                y = point.get("y") or point.get("coord2")
-
-                lat, lon = transformer.gauss_inverse(x, y, central_meridian, projection_height, add_500km)
-
-                results.append(
-                    {
-                        "name": name,
-                        "input_x": x,
-                        "input_y": y,
-                        "output_lat": lat,
-                        "output_lon": lon,
-                        "lat_dms": transformer.decimal_to_dms(lat),
-                        "lon_dms": transformer.decimal_to_dms(lon),
-                    }
-                )
-
-            else:
-                raise ValueError(f"未支持的转换类型: {transform_type}")
-
-        except Exception as point_error:  # noqa: BLE001
-            point_name = point.get("name", "")
-            logger.exception("处理坐标点 %s 时出错: %s", point_name, point_error)
-            results.append({"name": point_name, "error": str(point_error)})
-
-    success_count = len([item for item in results if "error" not in item])
-    logger.info(
-        "坐标转换完成: 类型=%s, 输入=%d, 成功=%d, 椭球=%s",
-        transform_type,
-        len(points),
-        success_count,
-        ellipsoid,
-    )
+        try:
+            result_payload = _compute_conversion(
+                service,
+                point,
+                source_system,
+                target_system,
+                seven_solution if seven_source in {"manual", "computed"} else {},
+                four_solution if four_source in {"manual", "computed"} else {},
+            )
+            conversion_results.append(result_payload)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("点 %s 转换失败: %s", point.name or "UNKNOWN", exc)
+            messages.append(f"{point.name or '未命名'} 转换失败: {exc}")
+            conversion_results.append({"name": point.name, "error": str(exc)})
 
     response = {
         "success": True,
-        "data": results,
-        "transform_type": transform_type,
-        "parameters": {
-            "central_meridian": central_meridian,
-            "projection_height": projection_height,
-            "add_500km": add_500km,
-            "ellipsoid": ellipsoid,
+        "data": {
+            "source_system": source_system.to_dict(),
+            "target_system": target_system.to_dict(),
+            "common_points": enriched_common,
+            "seven_parameters": {**seven_solution, "source": seven_source},
+            "four_parameters": {**four_solution, "source": four_source},
+            "points": enriched_points,
+            "results": conversion_results,
         },
-        "points_count": len(points),
-        "timestamp": datetime.now().isoformat(),
+        "messages": messages,
     }
     return jsonify(response)
 
 
-@api_bp.route("/xyz-to-blh", methods=["POST"])
-def convert_xyz_to_blh():
-    """空间直角坐标转大地坐标。"""
-
-    payload = request.get_json(silent=True) or {}
-    if not payload:
-        return jsonify({"success": False, "error": "未提供有效的 JSON 数据"}), 400
-
-    points = payload.get("points", [])
-    ellipsoid = payload.get("ellipsoid", "WGS84")
-
-    if not points:
-        return jsonify({"success": False, "error": "需至少提供一个坐标点"}), 400
-
-    try:
-        transformer = _get_transformer()
-        transformer.set_ellipsoid(ellipsoid)
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("XYZ->BLH 转换配置失败: %s", exc)
-        return jsonify({"success": False, "error": str(exc)}), 500
-
-    results: List[Dict[str, Any]] = []
-
-    for point in points:
-        try:
-            name = point.get("name", "")
-            x = point.get("x") or point.get("coord1")
-            y = point.get("y") or point.get("coord2")
-            z = point.get("z") or point.get("coord3")
-
-            B, L, H = transformer.xyz_to_blh(x, y, z)
-            results.append(
-                {
-                    "name": name,
-                    "input_x": x,
-                    "input_y": y,
-                    "input_z": z,
-                    "output_B": B,
-                    "output_L": L,
-                    "output_H": H,
-                    "B_dms": transformer.decimal_to_dms(B),
-                    "L_dms": transformer.decimal_to_dms(L),
-                }
-            )
-        except Exception as point_error:  # noqa: BLE001
-            point_name = point.get("name", "")
-            logger.exception("XYZ->BLH 处理点 %s 出错: %s", point_name, point_error)
-            results.append({"name": point_name, "error": str(point_error)})
-
-    response = {
-        "success": True,
-        "data": results,
-        "ellipsoid": ellipsoid,
-        "points_count": len(points),
-        "timestamp": datetime.now().isoformat(),
-    }
-    return jsonify(response)
-
-
-@api_bp.route("/blh-to-xyz", methods=["POST"])
-def convert_blh_to_xyz():
-    """大地坐标转空间直角坐标。"""
-
-    payload = request.get_json(silent=True) or {}
-    if not payload:
-        return jsonify({"success": False, "error": "未提供有效的 JSON 数据"}), 400
-
-    points = payload.get("points", [])
-    ellipsoid = payload.get("ellipsoid", "WGS84")
-
-    if not points:
-        return jsonify({"success": False, "error": "需至少提供一个坐标点"}), 400
-
-    try:
-        transformer = _get_transformer()
-        transformer.set_ellipsoid(ellipsoid)
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("BLH->XYZ 转换配置失败: %s", exc)
-        return jsonify({"success": False, "error": str(exc)}), 500
-
-    results: List[Dict[str, Any]] = []
-
-    for point in points:
-        try:
-            name = point.get("name", "")
-            B = point.get("B") or point.get("coord1")
-            L = point.get("L") or point.get("coord2")
-            H = point.get("H") or point.get("coord3")
-
-            if isinstance(B, str):
-                B = transformer.dms_to_decimal(B)
-            if isinstance(L, str):
-                L = transformer.dms_to_decimal(L)
-
-            x, y, z = transformer.blh_to_xyz(B, L, H)
-            results.append(
-                {
-                    "name": name,
-                    "input_B": B,
-                    "input_L": L,
-                    "input_H": H,
-                    "output_x": x,
-                    "output_y": y,
-                    "output_z": z,
-                    "B_dms": transformer.decimal_to_dms(B),
-                    "L_dms": transformer.decimal_to_dms(L),
-                }
-            )
-        except Exception as point_error:  # noqa: BLE001
-            point_name = point.get("name", "")
-            logger.exception("BLH->XYZ 处理点 %s 出错: %s", point_name, point_error)
-            results.append({"name": point_name, "error": str(point_error)})
-
-    response = {
-        "success": True,
-        "data": results,
-        "ellipsoid": ellipsoid,
-        "points_count": len(points),
-        "timestamp": datetime.now().isoformat(),
-    }
-    return jsonify(response)
-
-
-@api_bp.route("/four-parameter-transform", methods=["POST"])
-def handle_four_parameter_transform():
-    """四参数转换：支持计算参数或执行转换。"""
-
-    payload = request.get_json(silent=True) or {}
-    if not payload:
-        return jsonify({"success": False, "error": "未提供有效的 JSON 数据"}), 400
-
-    points = payload.get("points", [])
-    control_points = payload.get("control_points", []) or payload.get("common_points", [])
-    operation_type = payload.get("operation_type", "transform")
-
-    try:
-        if operation_type == "calculate_params":
-            if len(control_points) < 2:
-                return jsonify({"success": False, "error": "计算四参数至少需要 2 组控制点"}), 400
-
-            control_pairs = [
-                ((cp["source_x"], cp["source_y"]), (cp["target_x"], cp["target_y"]))
-                for cp in control_points
-            ]
-            dx, dy, alpha, m = transform_utils.calculate_four_parameters(control_pairs)
-            return jsonify(
-                {
-                    "success": True,
-                    "parameters": {
-                        "dx": dx,
-                        "dy": dy,
-                        "alpha": alpha,
-                        "m": m,
-                    },
-                    "control_points_count": len(control_points),
-                    "timestamp": datetime.now().isoformat(),
-                }
-            )
-
-        if operation_type == "transform":
-            if not points:
-                return jsonify({"success": False, "error": "需提供待转换坐标点"}), 400
-            if len(control_points) < 2:
-                return jsonify({"success": False, "error": "转换至少需要 2 组控制点"}), 400
-
-            control_pairs = [
-                ((cp["source_x"], cp["source_y"]), (cp["target_x"], cp["target_y"]))
-                for cp in control_points
-            ]
-            dx, dy, alpha, m = transform_utils.calculate_four_parameters(control_pairs)
-            points_to_transform = [(p["x"], p["y"]) for p in points]
-            transformed_points = transform_utils.four_parameter_transform(points_to_transform, dx, dy, alpha, m)
-
-            results = []
-            for idx, (original, transformed) in enumerate(zip(points, transformed_points)):
-                name = original.get("name", "")
-                x_new, y_new = transformed
-                results.append(
-                    {
-                        "name": name,
-                        "original_x": original["x"],
-                        "original_y": original["y"],
-                        "transformed_x": x_new,
-                        "transformed_y": y_new,
-                    }
-                )
-
-            return jsonify(
-                {
-                    "success": True,
-                    "data": results,
-                    "parameters": {
-                        "dx": dx,
-                        "dy": dy,
-                        "alpha": alpha,
-                        "m": m,
-                    },
-                    "control_points_count": len(control_points),
-                    "points_count": len(points),
-                    "timestamp": datetime.now().isoformat(),
-                }
-            )
-
-        return jsonify({"success": False, "error": f"未支持的操作类型: {operation_type}"}), 400
-
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("四参数转换失败: %s", exc)
-        return jsonify({"success": False, "error": str(exc)}), 500
-
-
-@api_bp.route("/four-param-transform", methods=["POST"])
-def transform_with_explicit_four_params():
-    """使用显式四参数执行平面坐标转换。"""
-
-    payload = request.get_json(silent=True) or {}
-    if not payload:
-        return jsonify({"success": False, "error": "未提供有效的 JSON 数据"}), 400
-
-    operation = payload.get("operation", "")
-    points = payload.get("points", [])
-    settings = payload.get("settings", {})
-
-    if not points:
-        return jsonify({"success": False, "error": "需提供待转换坐标点"}), 400
-
-    if operation != "four_param_forward":
-        return jsonify({"success": False, "error": f"未支持的操作类型: {operation}"}), 400
-
-    dx = settings.get("deltaX", 0.0)
-    dy = settings.get("deltaY", 0.0)
-    alpha = settings.get("rotation", 0.0)
-    m = settings.get("scale", 0.0)
-    coord_decimals = settings.get("coordDecimals", 3)
-
-    try:
-        points_to_transform = [(p["x"], p["y"]) for p in points]
-        transformed_points = transform_utils.four_parameter_transform(points_to_transform, dx, dy, alpha, m)
-
-        results = []
-        for original, transformed in zip(points, transformed_points):
-            name = original.get("name", "")
-            x_new, y_new = transformed
-            delta_x = x_new - original["x"]
-            delta_y = y_new - original["y"]
-            results.append(
-                {
-                    "name": name,
-                    "x": original["x"],
-                    "y": original["y"],
-                    "newX": round(x_new, coord_decimals),
-                    "newY": round(y_new, coord_decimals),
-                    "deltaX": round(delta_x, coord_decimals),
-                    "deltaY": round(delta_y, coord_decimals),
-                }
-            )
-
-        return jsonify(
-            {
-                "success": True,
-                "results": results,
-                "parameters": {
-                    "deltaX": dx,
-                    "deltaY": dy,
-                    "rotation": alpha,
-                    "scale": m,
-                },
-                "points_count": len(points),
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
-
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("按四参数执行转换失败: %s", exc)
-        return jsonify({"success": False, "error": str(exc)}), 500
-
-
-@api_bp.route("/seven-parameter-transform", methods=["POST"])
-def transform_with_seven_params():
-    """执行七参数空间坐标转换。"""
-
-    payload = request.get_json(silent=True) or {}
-    if not payload:
-        return jsonify({"success": False, "error": "未提供有效的 JSON 数据"}), 400
-
-    points = payload.get("points", [])
-    control_points = payload.get("control_points", [])
-
-    if not points:
-        return jsonify({"success": False, "error": "需提供待转换坐标点"}), 400
-    if len(control_points) < 3:
-        return jsonify({"success": False, "error": "七参数转换至少需要 3 组控制点"}), 400
-
-    try:
-        control_pairs = [
-            (
-                (cp["source_x"], cp["source_y"], cp["source_z"]),
-                (cp["target_x"], cp["target_y"], cp["target_z"]),
-            )
-            for cp in control_points
-        ]
-        params = transform_utils.calculate_seven_parameters(control_pairs)
-        transformed_points = transform_utils.seven_parameter_transform(
-            [(p["x"], p["y"], p["z"]) for p in points],
-            *params,
-        )
-
-        results = []
-        for original, transformed in zip(points, transformed_points):
-            name = original.get("name", "")
-            x_new, y_new, z_new = transformed
-            results.append(
-                {
-                    "name": name,
-                    "original_x": original["x"],
-                    "original_y": original["y"],
-                    "original_z": original["z"],
-                    "transformed_x": x_new,
-                    "transformed_y": y_new,
-                    "transformed_z": z_new,
-                }
-            )
-
-        parameter_keys = ["dx", "dy", "dz", "rx", "ry", "rz", "m"]
-        response_params = dict(zip(parameter_keys, params, strict=False))
-
-        return jsonify(
-            {
-                "success": True,
-                "data": results,
-                "parameters": response_params,
-                "control_points_count": len(control_points),
-                "points_count": len(points),
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
-
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("七参数转换失败: %s", exc)
-        return jsonify({"success": False, "error": str(exc)}), 500
-
-
-@api_bp.route("/zone-transform", methods=["POST"])
-def transform_zone():
-    """执行三度带与六度带的互转。"""
-
-    payload = request.get_json(silent=True) or {}
-    if not payload:
-        return jsonify({"success": False, "error": "未提供有效的 JSON 数据"}), 400
-
-    points = payload.get("points", [])
-    transform_type = payload.get("type", "3to6")
-    source_elevation = payload.get("sourceElevation", 0)
-    target_elevation = payload.get("targetElevation", 0)
-
-    if not points:
-        return jsonify({"success": False, "error": "需至少提供一个坐标点"}), 400
-
-    try:
-        transformer = _get_transformer()
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("坐标带转换服务不可用: %s", exc)
-        return jsonify({"success": False, "error": str(exc)}), 500
-
-    results: List[Dict[str, Any]] = []
-
-    for point in points:
-        try:
-            name = point.get("name", "")
-            x = point.get("x")
-            y = point.get("y")
-            height = point.get("height", 0)
-            zone = point.get("zone")
-
-            if transform_type == "3to6":
-                x_new, y_new, zone_new = transformer.zone_transform_3_to_6(x, y, zone)
-            elif transform_type == "6to3":
-                x_new, y_new, zone_new = transformer.zone_transform_6_to_3(x, y, zone)
-            else:
-                raise ValueError(f"未支持的带号转换类型: {transform_type}")
-
-            new_height = target_elevation if (source_elevation or target_elevation) else height
-
-            results.append(
-                {
-                    "name": name,
-                    "input_x": x,
-                    "input_y": y,
-                    "input_height": height,
-                    "input_zone": zone,
-                    "output_x": x_new,
-                    "output_y": y_new,
-                    "output_height": new_height,
-                    "output_zone": zone_new,
-                }
-            )
-        except Exception as point_error:  # noqa: BLE001
-            point_name = point.get("name", "")
-            logger.exception("带号转换处理点 %s 出错: %s", point_name, point_error)
-            results.append({"name": point_name, "error": str(point_error)})
-
-    response = {
-        "success": True,
-        "data": results,
-        "transform_type": transform_type,
-        "source_elevation": source_elevation,
-        "target_elevation": target_elevation,
-        "points_count": len(points),
-        "timestamp": datetime.now().isoformat(),
-    }
-    return jsonify(response)
+# --------------------------------------------------------------------------- #
+# Helper routines
+# --------------------------------------------------------------------------- #
 
 
 @api_bp.route("/coordinate/batch/geodetic-to-cartesian", methods=["POST"])
-def batch_geodetic_to_cartesian():
-    """批量将大地坐标转换为空间直角坐标。"""
+def coordinate_batch_geodetic_to_cartesian():
+    """Batch convert BLH to XYZ, typically used by file imports."""
 
     payload = request.get_json(silent=True) or {}
-    ellipsoid = payload.get("ellipsoid", "WGS84")
-    rows = payload.get("rows", [])
+    rows = payload.get("points") or []
+    ellipsoid = payload.get("ellipsoid")
 
     if not rows:
-        return jsonify({"success": False, "error": "需提供坐标数据"}), 400
+        return jsonify({"success": False, "error": "No points were provided for conversion"}), 400
 
+    service = _get_service()
     try:
-        transformer = _get_transformer()
-        transformer.set_ellipsoid(ellipsoid)
+        data = service.batch_geodetic_to_cartesian(rows, ellipsoid)
+        return jsonify({"success": True, "data": data})
+    except ValueError as exc:
+        logger.warning("Batch BLH to XYZ failed: %s", exc)
+        return jsonify({"success": False, "error": str(exc)}), 400
     except Exception as exc:  # noqa: BLE001
-        logger.exception("批量 BLH->XYZ 转换配置失败: %s", exc)
-        return jsonify({"success": False, "error": str(exc)}), 500
-
-    results = []
-    for row in rows:
-        try:
-            lat = row.get("B") or row.get("lat")
-            lon = row.get("L") or row.get("lon")
-            height = row.get("H") or row.get("height", 0)
-
-            if isinstance(lat, str):
-                lat = transformer.dms_to_decimal(lat)
-            if isinstance(lon, str):
-                lon = transformer.dms_to_decimal(lon)
-
-            x, y, z = transformer.blh_to_xyz(lat, lon, height)
-            results.append({"X": x, "Y": y, "Z": z})
-        except Exception as row_error:  # noqa: BLE001
-            logger.exception("批量 BLH->XYZ 处理行出错: %s", row_error)
-            results.append({"error": str(row_error)})
-
-    return jsonify({
-        "success": True,
-        "ellipsoid": ellipsoid,
-        "rows": results,
-        "timestamp": datetime.now().isoformat(),
-    })
+        logger.exception("Batch BLH to XYZ raised unexpected error: %s", exc)
+        return jsonify({"success": False, "error": f"Batch conversion failed: {exc}"}), 500
 
 
 @api_bp.route("/coordinate/batch/cartesian-to-geodetic", methods=["POST"])
-def batch_cartesian_to_geodetic():
-    """批量将空间直角坐标转换为大地坐标。"""
+def coordinate_batch_cartesian_to_geodetic():
+    """Batch convert XYZ to BLH, typically used by file imports."""
 
     payload = request.get_json(silent=True) or {}
-    ellipsoid = payload.get("ellipsoid", "WGS84")
-    rows = payload.get("rows", [])
+    rows = payload.get("points") or []
+    ellipsoid = payload.get("ellipsoid")
 
     if not rows:
-        return jsonify({"success": False, "error": "需提供坐标数据"}), 400
+        return jsonify({"success": False, "error": "No points were provided for conversion"}), 400
 
+    service = _get_service()
     try:
-        transformer = _get_transformer()
-        transformer.set_ellipsoid(ellipsoid)
+        data = service.batch_cartesian_to_geodetic(rows, ellipsoid)
+        return jsonify({"success": True, "data": data})
+    except ValueError as exc:
+        logger.warning("Batch XYZ to BLH failed: %s", exc)
+        return jsonify({"success": False, "error": str(exc)}), 400
     except Exception as exc:  # noqa: BLE001
-        logger.exception("批量 XYZ->BLH 转换配置失败: %s", exc)
-        return jsonify({"success": False, "error": str(exc)}), 500
+        logger.exception("Batch XYZ to BLH raised unexpected error: %s", exc)
+        return jsonify({"success": False, "error": f"Batch conversion failed: {exc}"}), 500
 
-    results = []
-    for row in rows:
-        try:
-            x = row.get("X") or row.get("x")
-            y = row.get("Y") or row.get("y")
-            z = row.get("Z") or row.get("z")
 
-            B, L, H = transformer.xyz_to_blh(x, y, z)
-            results.append({
-                "B": B,
-                "L": L,
-                "H": H,
-                "B_dms": transformer.decimal_to_dms(B),
-                "L_dms": transformer.decimal_to_dms(L),
-            })
-        except Exception as row_error:  # noqa: BLE001
-            logger.exception("批量 XYZ->BLH 处理行出错: %s", row_error)
-            results.append({"error": str(row_error)})
+# --------------------------------------------------------------------------- #
+# Helper routines
+# --------------------------------------------------------------------------- #
 
-    return jsonify({
-        "success": True,
-        "ellipsoid": ellipsoid,
-        "rows": results,
-        "timestamp": datetime.now().isoformat(),
-    })
+
+def _parse_manual_seven_parameters(raw: Dict[str, Any]) -> Dict[str, Any]:
+    dx = parse_float(raw.get("dx")) or 0.0
+    dy = parse_float(raw.get("dy")) or 0.0
+    dz = parse_float(raw.get("dz")) or 0.0
+
+    unit = str(raw.get("rotation_unit", raw.get("rotationUnits", "arcsec"))).lower()
+
+    def to_radians(value: Any) -> float:
+        angle = parse_float(value) or 0.0
+        if unit in {"arcsec", "arc-second", "arcseconds"}:
+            return math.radians(angle / 3600.0)
+        if unit in {"arcmin", "arc-minute", "arcminutes"}:
+            return math.radians(angle / 60.0)
+        if unit in {"deg", "degree", "degrees"}:
+            return math.radians(angle)
+        return angle  # assume already radians
+
+    rx = to_radians(raw.get("rx") or raw.get("rotationX"))
+    ry = to_radians(raw.get("ry") or raw.get("rotationY"))
+    rz = to_radians(raw.get("rz") or raw.get("rotationZ"))
+
+    scale = parse_float(raw.get("scale"))
+    if scale is not None:
+        scale_delta = scale
+    else:
+        scale_ppm = parse_float(raw.get("scale_ppm") or raw.get("ppm"))
+        scale_factor = parse_float(raw.get("scale_factor"))
+        if scale_ppm is not None:
+            scale_delta = scale_ppm * 1e-6
+        elif scale_factor is not None:
+            scale_delta = scale_factor - 1.0
+        else:
+            scale_delta = 0.0
+
+    return {
+        "dx": dx,
+        "dy": dy,
+        "dz": dz,
+        "rx": rx,
+        "ry": ry,
+        "rz": rz,
+        "scale": scale_delta,
+        "scale_ppm": scale_delta * 1_000_000,
+        "rotation_arcsec": {axis: value * (180 / math.pi) * 3600 for axis, value in {"rx": rx, "ry": ry, "rz": rz}.items()},
+    }
+
+
+def _parse_manual_four_parameters(raw: Dict[str, Any]) -> Dict[str, Any]:
+    dx = parse_float(raw.get("dx")) or 0.0
+    dy = parse_float(raw.get("dy")) or 0.0
+
+    rotation_unit = str(raw.get("rotation_unit", raw.get("rotationUnits", "deg"))).lower()
+    rotation_val = parse_float(raw.get("rotation") or raw.get("theta") or raw.get("angle")) or 0.0
+    if rotation_unit in {"deg", "degree", "degrees"}:
+        rotation = math.radians(rotation_val)
+    elif rotation_unit in {"arcsec", "arc-second", "arcseconds"}:
+        rotation = math.radians(rotation_val / 3600.0)
+    elif rotation_unit in {"arcmin", "arc-minute", "arcminutes"}:
+        rotation = math.radians(rotation_val / 60.0)
+    else:
+        rotation = rotation_val
+
+    scale = parse_float(raw.get("scale"))
+    if scale is not None:
+        scale_delta = scale
+    else:
+        scale_ppm = parse_float(raw.get("scale_ppm") or raw.get("ppm"))
+        scale_factor = parse_float(raw.get("scale_factor"))
+        if scale_ppm is not None:
+            scale_delta = scale_ppm * 1e-6
+        elif scale_factor is not None:
+            scale_delta = scale_factor - 1.0
+        else:
+            scale_delta = 0.0
+
+    return {
+        "dx": dx,
+        "dy": dy,
+        "rotation": rotation,
+        "scale": scale_delta,
+        "scale_ppm": scale_delta * 1_000_000,
+        "scale_factor": 1.0 + scale_delta,
+        "rotation_arcsec": rotation * (180 / math.pi) * 3600,
+    }
+
+
+def _compute_conversion(
+    service: UniversalCoordinateService,
+    source_point: PointRecord,
+    source_system,
+    target_system,
+    seven_parameters: Dict[str, Any],
+    four_parameters: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Run the cascade of transformations for a single point."""
+
+    working_point = source_point.clone()
+    if any(
+        value is None
+        for value in (working_point.B, working_point.L, working_point.X, working_point.Y, working_point.Z, working_point.x, working_point.y)
+    ):
+        working_point = service.fill_point_components(working_point, source_system)
+
+    target_point = PointRecord(name=working_point.name)
+
+    if seven_parameters and all(key in seven_parameters for key in ("dx", "dy", "dz")):
+        X, Y, Z = service.apply_seven_parameters(working_point, seven_parameters)
+        target_point.X, target_point.Y, target_point.Z = X, Y, Z
+        target_point.diagnostics.append("XYZ 通过七参数转换获得。")
+    else:
+        if None in (working_point.X, working_point.Y, working_point.Z):
+            raise ValueError("缺少七参数或源点 XYZ，无法完成空间坐标转换。")
+        target_point.X, target_point.Y, target_point.Z = working_point.X, working_point.Y, working_point.Z
+        target_point.diagnostics.append("未提供七参数，直接沿用源空间坐标。")
+
+    target_point = service.fill_point_components(target_point, target_system)
+
+    plane_four = None
+    if four_parameters and working_point.x is not None and working_point.y is not None:
+        plane_x, plane_y = service.apply_four_parameters(working_point, four_parameters)
+        plane_four = {
+            "x": plane_x,
+            "y": plane_y,
+            "rotation_arcsec": four_parameters.get("rotation_arcsec"),
+            "scale_factor": four_parameters.get("scale_factor", 1.0),
+        }
+
+    payload = {
+        "name": working_point.name,
+        "source": working_point.to_payload(),
+        "target": target_point.to_payload(),
+    }
+    if plane_four is not None:
+        payload["plane_from_four_parameters"] = plane_four
+    return payload

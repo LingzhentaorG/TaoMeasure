@@ -10,9 +10,21 @@ let calculationResults = {};
 let calculationSettings = {};
 
 // API基础URL
-const DEFAULT_API_BASE = `${window.location.protocol}//${window.location.hostname}:5000`;
+function resolveApiBase() {
+    // 直接使用127.0.0.1:5000作为后端地址，避免IPv6地址解析问题
+    return 'http://127.0.0.1:5000';
+}
+
+const DEFAULT_API_BASE = resolveApiBase();
 // 后端接口基址，可通过 window.__TAOMEASURE_API__ 动态覆盖。
-const API_BASE = window.__TAOMEASURE_API__ || DEFAULT_API_BASE;
+const rawConfiguredApiBase = window.__TAOMEASURE_API__ || DEFAULT_API_BASE;
+const sanitizedApiBase = (rawConfiguredApiBase || '').replace(/\/+$/, '');
+const API_BASE = sanitizedApiBase || DEFAULT_API_BASE;
+const API_PREFIX = `${API_BASE}/api`;
+window.__TAOMEASURE_DEFAULT_API__ = DEFAULT_API_BASE;
+window.__TAOMEASURE_RESOLVED_API__ = API_BASE;
+window.__TAOMEASURE_API_PREFIX__ = API_PREFIX;
+window.__resolveTaoMeasureApiBase = resolveApiBase;
 
 // 功能配置
 const FUNCTION_CONFIG = {
@@ -425,82 +437,20 @@ function switchFunction(module, func, clickedButton) {
     } else if (module === 'coordinate') {
         const coordinateWorkArea = document.getElementById('coordinate-work-area');
         if (coordinateWorkArea) {
-            // Hide all function-content divs within the coordinate work area
+            coordinateWorkArea.style.display = 'block';
             coordinateWorkArea.querySelectorAll('.function-content').forEach(content => {
                 content.style.display = 'none';
             });
-
-            // Show the content for the selected function
-            const targetContent = document.getElementById(`${func}-content`);
-            if (targetContent) {
-                targetContent.style.display = 'block';
-                
-                // 初始化各个坐标转换功能
-                setTimeout(() => {
-                    switch(func) {
-                        case 'gauss_forward':
-                            if (typeof initializeGaussForwardTable === 'function') {
-                                initializeGaussForwardTable();
-                            }
-                            if (typeof bindGaussForwardEvents === 'function') {
-                                bindGaussForwardEvents();
-                            }
-                            if (typeof updateGaussParametersDisplay === 'function') {
-                                updateGaussParametersDisplay();
-                            }
-                            break;
-                            
-                        case 'gauss_inverse':
-                            if (typeof initializeGaussInverse === 'function') {
-                                initializeGaussInverse();
-                            }
-                            break;
-                            
-                        case 'xyz_to_blh':
-                            if (typeof initializeXYZToBLH === 'function') {
-                                initializeXYZToBLH();
-                            }
-                            break;
-                            
-                        case 'blh_to_xyz':
-                            if (typeof initializeBLHToXYZ === 'function') {
-                                initializeBLHToXYZ();
-                            }
-                            break;
-                            
-                        case 'zone_transform_1':
-                            if (typeof initializeZoneTransform1 === 'function') {
-                                initializeZoneTransform1();
-                            }
-                            break;
-                            
-                        case 'zone_transform_2':
-                            if (typeof initializeZoneTransform2 === 'function') {
-                                initializeZoneTransform2();
-                            }
-                            break;
-                            
-                        case 'four_param_forward':
-                            if (typeof initializeFourParamForward === 'function') {
-                                initializeFourParamForward();
-                            }
-                            break;
-                            
-                        // 四参数转换反算已删除
-                            
-                        case 'seven_param':
-                            if (typeof initializeSevenParam === 'function') {
-                                initializeSevenParam();
-                            }
-                            break;
-                    }
-                }, 100);
-            } else {
-                // If no specific content, show the default message
-                const defaultContent = document.getElementById('coordinate-default-content');
-                if (defaultContent) {
-                    defaultContent.style.display = 'block';
-                }
+            const universalContent = document.getElementById('coordinate-universal-content');
+            if (universalContent) {
+                universalContent.style.display = 'block';
+            }
+            const defaultContent = document.getElementById('coordinate-default-content');
+            if (defaultContent) {
+                defaultContent.style.display = 'none';
+            }
+            if (window.coordinateUniversalApp && typeof window.coordinateUniversalApp.onShow === 'function') {
+                window.coordinateUniversalApp.onShow();
             }
         }
     } else if (module === 'curve') {
@@ -1506,7 +1456,7 @@ async function performCalculation(data) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
         
-        const response = await fetch('http://127.0.0.1:5000/api/gps-altitude', {
+        const response = await fetch(`${API_PREFIX}/gps-altitude`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

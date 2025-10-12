@@ -3,8 +3,16 @@
  */
 class FileHandler {
     constructor() {
-        this.apiUrl = 'http://127.0.0.1:5000/api';
-        this.supportedFormats = ['.txt', '.csv', '.dat'];
+        const resolvedBase = window.__TAOMEASURE_RESOLVED_API__ 
+            || (typeof window.__resolveTaoMeasureApiBase === 'function'
+                ? window.__resolveTaoMeasureApiBase()
+                : 'http://127.0.0.1:5000');
+        const normalizedBase = (resolvedBase || '').replace(/\/+$/, '');
+        this.apiUrl = window.__TAOMEASURE_API_PREFIX__ || `${normalizedBase}/api`;
+        this.supportedFormats = ['.txt', '.csv', '.dat', '.xls', '.xlsx'];
+        this.currentFileContent = null;
+        this.currentFileEncoding = 'text';
+        this.currentFileName = '';
         this.initFileUploadModal();
     }
 
@@ -43,62 +51,10 @@ class FileHandler {
                                         <small>格式：点名 X Y Z</small>
                                     </span>
                                 </label>
-                                <label class="file-type-option">
-                                    <input type="radio" name="fileType" value="gauss_forward">
-                                    <span class="type-label">
-                                        <i class="fas fa-arrow-right"></i>
-                                        <strong>高斯投影正算</strong>
-                                        <small>格式：点名 纬度 经度</small>
-                                    </span>
-                                </label>
-                                <label class="file-type-option">
-                                    <input type="radio" name="fileType" value="gauss_inverse">
-                                    <span class="type-label">
-                                        <i class="fas fa-arrow-left"></i>
-                                        <strong>高斯投影反算</strong>
-                                        <small>格式：点名 X Y</small>
-                                    </span>
-                                </label>
-                                <label class="file-type-option">
-                                    <input type="radio" name="fileType" value="four_param_control">
-                                    <span class="type-label">
-                                        <i class="fas fa-exchange-alt"></i>
-                                        <strong>四参数控制点</strong>
-                                        <small>格式：点号 源X 源Y 目标X 目标Y</small>
-                                    </span>
-                                </label>
-                                <label class="file-type-option">
-                                    <input type="radio" name="fileType" value="four_param_unknown">
-                                    <span class="type-label">
-                                        <i class="fas fa-question"></i>
-                                        <strong>四参数未知点</strong>
-                                        <small>格式：点号 X Y</small>
-                                    </span>
-                                </label>
-                                <label class="file-type-option">
-                                    <input type="radio" name="fileType" value="seven_param_control">
-                                    <span class="type-label">
-                                        <i class="fas fa-exchange-alt"></i>
-                                        <strong>七参数控制点</strong>
-                                        <small>格式：点号 源X 源Y 源Z 目标X 目标Y 目标Z</small>
-                                    </span>
-                                </label>
-                                <label class="file-type-option">
-                                    <input type="radio" name="fileType" value="seven_param_unknown">
-                                    <span class="type-label">
-                                        <i class="fas fa-question"></i>
-                                        <strong>七参数未知点</strong>
-                                        <small>格式：点号 X Y Z</small>
-                                    </span>
-                                </label>
-                                <label class="file-type-option">
-                                    <input type="radio" name="fileType" value="zone_transform">
-                                    <span class="type-label">
-                                        <i class="fas fa-map"></i>
-                                        <strong>换带变换</strong>
-                                        <small>格式：点名 X Y 或 点名,X,Y,H</small>
-                                    </span>
-                                </label>
+                                <div class="file-type-note">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span>综合坐标转换相关文件请改用“坐标转换”模块内的导入面板。</span>
+                                </div>
                             </div>
                         </div>
 
@@ -108,9 +64,9 @@ class FileHandler {
                                 <div class="upload-placeholder">
                                     <i class="fas fa-cloud-upload-alt"></i>
                                     <p>拖拽文件到此处或点击选择文件</p>
-                                    <p class="file-hint">支持 .txt, .csv, .dat 格式</p>
+                                    <p class="file-hint">支持 .txt, .csv, .dat, .xls, .xlsx 格式</p>
                                 </div>
-                                <input type="file" id="fileInput" accept=".txt,.csv,.dat" style="display: none;">
+                                <input type="file" id="fileInput" accept=".txt,.csv,.dat,.xls,.xlsx" style="display: none;">
                             </div>
                             <div class="file-info" id="fileInfo" style="display: none;">
                                 <div class="file-details">
@@ -186,18 +142,18 @@ class FileHandler {
         // 验证文件类型
         const extension = '.' + file.name.split('.').pop().toLowerCase();
         if (!this.supportedFormats.includes(extension)) {
-            this.showMessage('不支持的文件格式，请选择 .txt, .csv 或 .dat 文件', 'error');
+            this.showMessage('暂不支持该文件类型，请选择 .txt、.csv、.dat、.xls 或 .xlsx', 'error');
             return;
         }
 
         // 读取文件内容
         try {
-            const content = await this.readFileContent(file);
-            this.currentFileContent = content;
+            const fileData = await this.readFileContent(file);
+            this.currentFileContent = fileData.content;
+            this.currentFileEncoding = fileData.encoding;
             this.currentFileName = file.name;
 
-            // 显示文件信息
-            this.displayFileInfo(file, content);
+            await this.displayFileInfo(file, fileData);
             this.validateForm();
 
         } catch (error) {
@@ -210,18 +166,55 @@ class FileHandler {
      * 读取文件内容
      */
     readFileContent(file) {
+        const extension = '.' + (file.name.split('.').pop() || '').toLowerCase();
+        const isBinary = ['.xls', '.xlsx'].includes(extension);
+
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target.result);
             reader.onerror = () => reject(new Error('文件读取失败'));
-            reader.readAsText(file, 'utf-8');
+
+            if (isBinary) {
+                reader.onload = (e) => {
+                    try {
+                        const base64 = this.arrayBufferToBase64(e.target.result);
+                        resolve({ content: base64, encoding: 'base64' });
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                reader.onload = (e) => resolve({ content: e.target.result, encoding: 'text' });
+                reader.readAsText(file, 'utf-8');
+            }
         });
+    }
+
+    arrayBufferToBase64(buffer) {
+        const bytes = new Uint8Array(buffer || []);
+        const chunkSize = 0x8000;
+        let binary = '';
+        for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+            const chunk = bytes.subarray(offset, offset + chunkSize);
+            binary += String.fromCharCode(...chunk);
+        }
+        return btoa(binary);
+    }
+
+    escapeHtml(value) {
+        if (value === undefined || value === null) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     /**
      * 显示文件信息
      */
-    async displayFileInfo(file, content) {
+    async displayFileInfo(file, fileData) {
         const fileInfo = document.getElementById('fileInfo');
         const fileName = fileInfo.querySelector('.file-name');
         const fileSize = fileInfo.querySelector('.file-size');
@@ -229,28 +222,38 @@ class FileHandler {
 
         fileName.textContent = file.name;
         fileSize.textContent = this.formatFileSize(file.size);
+        const { content, encoding } = fileData || {};
 
         // 获取文件信息
         try {
             const response = await fetch(`${this.apiUrl}/file/info`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content })
+                body: JSON.stringify({
+                    content,
+                    filename: file.name,
+                    encoding: encoding || 'text'
+                })
             });
 
             const result = await response.json();
             if (result.success) {
-                const info = result.data;
+                const info = result.data || {};
+                const sampleText = this.escapeHtml(((info.sample_line || '') + '').replace(/\t/g, ' | '));
                 filePreview.innerHTML = `
                     <div class="file-stats">
-                        <span>总行数: ${info.total_lines}</span>
-                        <span>有效行数: ${info.valid_lines}</span>
-                        <span>检测格式: ${info.detected_format}</span>
+                        <span>Total lines: ${info.total_lines}</span>
+                        <span>Valid lines: ${info.valid_lines}</span>
+                        <span>Detected format: ${this.escapeHtml(info.detected_format || 'unknown')}</span>
                     </div>
                     <div class="file-sample">
-                        <strong>示例行:</strong>
-                        <code>${info.sample_line}</code>
+                        <strong>Sample:</strong>
+                        <code>${sampleText || 'N/A'}</code>
                     </div>
+                `;
+            } else {
+                filePreview.innerHTML = `
+                    <div class="file-error">${this.escapeHtml(result.error || "Unable to analyse file")}</div>
                 `;
             }
         } catch (error) {
@@ -370,20 +373,24 @@ class FileHandler {
             return;
         }
 
-        try {
-            // 显示加载状态
-            const processBtn = document.getElementById('processFileBtn');
-            const originalText = processBtn.textContent;
-            processBtn.textContent = '处理中...';
-            processBtn.disabled = true;
+        const processBtn = document.getElementById('processFileBtn');
+        const originalText = processBtn ? processBtn.textContent : '处理文件';
 
+        try {
+            // 显示处理状态
+            if (processBtn) {
+                processBtn.textContent = '正在处理...';
+                processBtn.disabled = true;
+            }
             // 解析文件
             const parseResponse = await fetch(`${this.apiUrl}/file/parse`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     content: this.currentFileContent,
-                    type: selectedType
+                    type: selectedType,
+                    filename: this.currentFileName,
+                    encoding: this.currentFileEncoding
                 })
             });
 
@@ -411,9 +418,10 @@ class FileHandler {
             this.showMessage('处理文件失败：' + error.message, 'error');
         } finally {
             // 恢复按钮状态
-            const processBtn = document.getElementById('processFileBtn');
-            processBtn.textContent = originalText;
-            processBtn.disabled = false;
+            if (processBtn) {
+                processBtn.textContent = originalText;
+                processBtn.disabled = false;
+            }
         }
     }
 

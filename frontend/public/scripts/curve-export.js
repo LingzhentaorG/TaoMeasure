@@ -5,6 +5,12 @@
 
 class CurveExportService {
     constructor() {
+        const resolvedBase = window.__TAOMEASURE_RESOLVED_API__
+            || (typeof window.__resolveTaoMeasureApiBase === 'function'
+                ? window.__resolveTaoMeasureApiBase()
+                : 'http://127.0.0.1:5000');
+        const normalizedBase = (resolvedBase || '').replace(/\/+$/, '');
+        this.apiPrefix = window.__TAOMEASURE_API_PREFIX__ || `${normalizedBase}/api`;
         this.init();
     }
     
@@ -207,7 +213,7 @@ class CurveExportService {
                 projectName
             };
 
-            const response = await fetch('http://127.0.0.1:5000/api/export/dxf', {
+            const response = await fetch(`${this.apiPrefix}/export/dxf`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

@@ -12,7 +12,7 @@ from flask_cors import CORS
 
 from .api import register_api_routes
 from .config import Config, load_config
-from .domain import CoordinateTransform, CurveDesign, FileHandler, GPSAltitudeConverter
+from .domain import CurveDesign, FileHandler, GPSAltitudeConverter, UniversalCoordinateService
 
 
 def create_app(config: Config | None = None) -> Flask:
@@ -52,7 +52,7 @@ def _register_services(app: Flask) -> None:
 
     services: Dict[str, Any] = {
         "gps_converter": GPSAltitudeConverter(),
-        "coordinate_transformer": CoordinateTransform(),
+        "coordinate_universal": UniversalCoordinateService(),
         "curve_designer": CurveDesign(),
         "file_handler": FileHandler(),
     }

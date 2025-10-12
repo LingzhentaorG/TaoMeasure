@@ -55,7 +55,7 @@ python app.py
 cd frontend/public
 python -m http.server 5173
 ```
-
+http://localhost:5173
 随后访问 `http://127.0.0.1:5173`。若后端部署在其他主机，可在页面加载前设置 `window.__TAOMEASURE_API__ = 'http://your-host:port';` 覆盖默认 API 地址。
 
 ## 命令行工具
