@@ -13,6 +13,7 @@
 ## 演示视频 | Demo Video
 
 [![TaoMeasure Demo Video](https://img.shields.io/badge/YouTube-演示视频-red.svg)](https://youtu.be/KvvNaqw_Ysc)
+[![TaoMeasure Bilibili Video](https://img.shields.io/badge/Bilibili-演示视频-00A1D6.svg)](https://www.bilibili.com/video/BV1B34GzmEi8/)
 
 ## 项目简介 | Project Introduction
 
