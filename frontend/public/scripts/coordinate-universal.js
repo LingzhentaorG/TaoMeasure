@@ -12,18 +12,43 @@ const UNIVERSAL_IMPORT_LABELS = {
     target_system: "目标坐标系统",
 };
 
+
+const DECIMAL_SETTING_PRESETS = Object.freeze({
+    table: [
+        { id: "angle", label: "经纬度 B/L (°)", default: 8, min: 4, max: 10 },
+        { id: "height", label: "高程 H/h (m)", default: 3, min: 0, max: 6 },
+        { id: "cartesian", label: "空间直角坐标 X/Y/Z (m)", default: 4, min: 0, max: 6 },
+        { id: "plane", label: "平面坐标 x/y (m)", default: 3, min: 0, max: 6 },
+    ],
+    report: [
+        { id: "angle", label: "经纬度 B/L (°)", default: 8, min: 4, max: 10 },
+        { id: "height", label: "高程 H/h (m)", default: 3, min: 0, max: 6 },
+        { id: "cartesian", label: "空间直角坐标 X/Y/Z (m)", default: 4, min: 0, max: 6 },
+        { id: "plane", label: "平面坐标 x/y (m)", default: 3, min: 0, max: 6 },
+        { id: "parameterTranslation", label: "平移参数 ΔX/ΔY/ΔZ (m)", default: 6, min: 0, max: 8 },
+        { id: "parameterRotation", label: "旋转参数 (″)", default: 6, min: 0, max: 8 },
+        { id: "parameterScale", label: "尺度参数 (ppm)", default: 6, min: 0, max: 8 },
+        { id: "accuracy", label: "精度指标 (m)", default: 4, min: 0, max: 6 },
+    ],
+});
+
 class CoordinateUniversalApp {
     constructor() {
         this.apiUrl = this._resolveApiUrl();
         this.metadata = { ellipsoids: [] };
         this.manualModes = { seven: false, four: false };
         this.lastResults = [];
+        this.latestSevenParameters = null;
+        this.latestFourParameters = null;
+        this.latestAccuracy = null;
         this.elements = {};
         this.currentImportTarget = null;
         this.importFileInputs = {};
         // 字段映射相关变量
         this.fieldMappingData = null;
         this.fieldMappingConfig = {};
+        this.exportContext = null;
+        this.decimalOverrideCache = {};
         this.initialize();
     }
 
@@ -56,6 +81,7 @@ class CoordinateUniversalApp {
             return;
         }
         this.bindEvents();
+        this.setupAccuracyControls();
         this.setupImportFileInputs();
         this.loadMetadata()
             .then(() => {
@@ -69,6 +95,7 @@ class CoordinateUniversalApp {
             })
             .finally(() => {
                 this.ensureInitialRows();
+                this.resetAccuracyPanel();
             });
     }
 
@@ -97,6 +124,34 @@ class CoordinateUniversalApp {
         this.elements.dataPreview = document.getElementById("data-preview");
         this.elements.fieldMappingContainer = document.getElementById("field-mapping-container");
         this.elements.fieldMappingConfirmBtn = document.getElementById("field-mapping-confirm");
+        this.elements.exportModal = document.getElementById("coordinateExportModal");
+        this.elements.exportTitle = document.getElementById("coordinate-export-title");
+        this.elements.exportFormatContainer = document.getElementById("coordinate-export-format");
+        this.elements.exportOptionsSection = document.getElementById("coordinate-export-options-section");
+        this.elements.exportOptionsContainer = document.getElementById("coordinate-export-options");
+        this.elements.exportFilename = document.getElementById("coordinate-export-filename");
+        this.elements.exportDecimals = document.getElementById("coordinate-export-decimals");
+        this.elements.exportIncludeHeader = document.getElementById("coordinate-export-include-header");
+        this.elements.exportIncludeTimestamp = document.getElementById("coordinate-export-include-timestamp");
+        this.elements.exportConfirmBtn = document.getElementById("coordinate-export-confirm");
+        this.elements.exportDecimalRow = document.getElementById("coordinate-export-decimal-row");
+        this.elements.exportDecimalGroupsRow = document.getElementById("coordinate-export-decimal-groups");
+        this.elements.exportDecimalGrid = document.getElementById("coordinate-export-decimal-grid");
+        this.elements.exportDecimalHint = document.getElementById("coordinate-export-decimal-hint");
+        this.elements.exportDecimalsRow = this.elements.exportDecimals ? this.elements.exportDecimals.closest(".param-row") : this.elements.exportDecimalRow || null;
+        this.elements.exportHeaderToggle = this.elements.exportIncludeHeader ? this.elements.exportIncludeHeader.closest(".inline-label") : null;
+        this.elements.accuracyWrapper = scope.querySelector("#accuracy-content");
+        this.elements.accuracyPlaceholder = scope.querySelector("#accuracy-placeholder");
+        this.elements.sevenAccuracySummary = scope.querySelector("#seven-accuracy-summary");
+        this.elements.fourAccuracySummary = scope.querySelector("#four-accuracy-summary");
+        this.elements.sevenAccuracyTableBody = scope.querySelector("#seven-accuracy-table tbody");
+        this.elements.fourAccuracyTableBody = scope.querySelector("#four-accuracy-table tbody");
+        this.elements.sevenAccuracyMeta = scope.querySelector("#seven-accuracy-meta");
+        this.elements.fourAccuracyMeta = scope.querySelector("#four-accuracy-meta");
+        this.elements.accuracyStack = scope.querySelector("#accuracy-stack");
+        this.elements.accuracySlider = scope.querySelector("#accuracy-split-slider");
+        this.elements.accuracySplitDisplay = scope.querySelector("#accuracy-split-display");
+        this.elements.accuracyPanes = Array.from(scope.querySelectorAll(".accuracy-pane"));
     }
     bindEvents() {
         const handlers = {
@@ -110,8 +165,11 @@ class CoordinateUniversalApp {
             "common-export-btn": () => this.exportCommon(),
             "points-export-btn": () => this.exportPoints(),
             "results-export-btn": () => this.exportResults(),
+            "universal-export-report": () => this.initiateReportExport(),
+            "universal-clear-all": () => this.clearAllTables(),
             "universal-import-confirm": () => this.handleImport(),
             "field-mapping-confirm": () => this.handleFieldMappingConfirm(),
+            "coordinate-export-confirm": () => this.confirmExport(),
             "cancelFieldMapping": () => this.closeFieldMappingModal(),
             "universal-compute-all": () => this.runComprehensiveCompute(),
         };
@@ -141,7 +199,10 @@ class CoordinateUniversalApp {
         document.querySelectorAll("[data-close-modal]").forEach((btn) => {
             btn.addEventListener("click", (event) => {
                 event.preventDefault();
-                this.closeImportModal();
+                const modalId = btn.dataset.closeModal;
+                if (modalId) {
+                    this.closeModal(modalId);
+                }
             });
         });
 
@@ -161,6 +222,64 @@ class CoordinateUniversalApp {
         this.elements.ellipsoidSelects.forEach((select) => {
             select.addEventListener("change", (event) => this.onEllipsoidChange(event));
         });
+    }
+
+
+    setupAccuracyControls() {
+        this.setupAccuracySplitter();
+    }
+
+    setupAccuracySplitter() {
+        const slider = this.elements.accuracySlider;
+        const stack = this.elements.accuracyStack;
+        if (!slider || !stack) return;
+        const panes = this.elements.accuracyPanes || [];
+        const apply = (value) => this.applyAccuracySplit(value);
+        slider.addEventListener('input', (event) => apply(Number(event.target.value)));
+        slider.addEventListener('change', (event) => apply(Number(event.target.value)));
+        apply(Number(slider.value) || 50);
+    }
+
+    applyAccuracySplit(value) {
+        const slider = this.elements.accuracySlider;
+        const panes = this.elements.accuracyPanes || [];
+        if (!panes.length) return;
+        const topPane = panes[0];
+        const bottomPane = panes[1] || panes[0];
+        const numericValue = Number(value);
+        const normalized = Number.isFinite(numericValue) ? Math.min(Math.max(numericValue, 20), 80) : 50;
+        if (slider && slider.value !== String(normalized)) {
+            slider.value = String(normalized);
+        }
+        if (topPane) {
+            topPane.style.flexGrow = normalized;
+            topPane.style.flexBasis = '0%';
+        }
+        if (bottomPane) {
+            const remain = 100 - normalized;
+            bottomPane.style.flexGrow = remain;
+            bottomPane.style.flexBasis = '0%';
+        }
+        if (this.elements.accuracySplitDisplay) {
+            this.elements.accuracySplitDisplay.textContent = `${normalized}% / ${100 - normalized}%`;
+        }
+    }
+
+    toggleAccuracyControls(enabled) {
+        if (this.elements.accuracySlider) {
+            this.elements.accuracySlider.disabled = !enabled;
+        }
+        if (this.elements.accuracyWrapper) {
+            this.elements.accuracyWrapper.classList.toggle('has-data', Boolean(enabled));
+        }
+        if (this.elements.accuracyStack) {
+            this.elements.accuracyStack.classList.toggle('is-active', Boolean(enabled));
+        }
+        const sliderValue = Number(this.elements.accuracySlider?.value) || 50;
+        this.applyAccuracySplit(sliderValue);
+        if (this.elements.accuracySplitDisplay) {
+            this.elements.accuracySplitDisplay.style.visibility = enabled ? '' : 'hidden';
+        }
     }
 
     setupImportFileInputs() {
@@ -254,13 +373,31 @@ class CoordinateUniversalApp {
     populateEllipsoidSelects() {
         const ellipsoids = this.metadata.ellipsoids || [];
         this.elements.ellipsoidSelects.forEach((select) => {
+            if (!select) return;
+            const currentValue = select.value;
             select.innerHTML = "";
+            const placeholder = document.createElement("option");
+            placeholder.value = "";
+            placeholder.textContent = "请选择椭球";
+            placeholder.disabled = true;
+            select.appendChild(placeholder);
             ellipsoids.forEach((item) => {
                 const option = document.createElement("option");
                 option.value = item.name;
                 option.textContent = item.name;
                 select.appendChild(option);
             });
+            const customOption = document.createElement("option");
+            customOption.value = "__custom__";
+            customOption.textContent = "自定义椭球";
+            select.appendChild(customOption);
+            if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+                select.value = currentValue;
+            } else if (ellipsoids.length) {
+                select.value = ellipsoids[0].name;
+            } else {
+                select.value = "__custom__";
+            }
         });
     }
 
@@ -284,21 +421,214 @@ class CoordinateUniversalApp {
 
     onEllipsoidChange(event) {
         const select = event.target;
-        const record = (this.metadata.ellipsoids || []).find((item) => item.name === select.value);
-        if (!record) return;
         const form = select.closest(".system-form");
         if (!form) return;
+        if (select.value === "__custom__" || !select.value) {
+            this.unlockEllipsoidInputs(form);
+            return;
+        }
+        const record = (this.metadata.ellipsoids || []).find((item) => item.name === select.value);
+        if (!record) {
+            this.unlockEllipsoidInputs(form);
+            return;
+        }
+        this.applyEllipsoidRecord(form, record, { lock: true });
+    }
+
+    applyEllipsoidRecord(form, record, options = {}) {
+        const lock = Boolean(options.lock);
         const aInput = form.querySelector('[data-target="ellipsoid.a"]');
-        const invInput = form.querySelector('[data-target="ellipsoid.inverse_flattening"]');
-        if (aInput && aInput.dataset.auto !== "false") {
+        if (aInput) {
             aInput.value = record.a ?? "";
             aInput.dataset.auto = "true";
+            aInput.readOnly = lock;
+            aInput.classList.toggle("locked-input", lock);
         }
-        if (invInput && invInput.dataset.auto !== "false") {
+        const invInput = form.querySelector('[data-target="ellipsoid.inverse_flattening"]');
+        if (invInput) {
             const inv = record.f_inverse ?? (record.f ? 1 / record.f : "");
             invInput.value = inv ?? "";
             invInput.dataset.auto = "true";
+            invInput.readOnly = lock;
+            invInput.classList.toggle("locked-input", lock);
         }
+    }
+
+    unlockEllipsoidInputs(form) {
+        const inputs = form.querySelectorAll('[data-target="ellipsoid.a"], [data-target="ellipsoid.inverse_flattening"]');
+        inputs.forEach((input) => {
+            input.readOnly = false;
+            input.classList.remove("locked-input");
+            input.dataset.auto = "false";
+        });
+    }
+
+
+    resetAccuracyPanel() {
+        if (this.elements.sevenAccuracySummary) this.elements.sevenAccuracySummary.innerHTML = "";
+        if (this.elements.fourAccuracySummary) this.elements.fourAccuracySummary.innerHTML = "";
+        if (this.elements.sevenAccuracyTableBody) this.elements.sevenAccuracyTableBody.innerHTML = "";
+        if (this.elements.fourAccuracyTableBody) this.elements.fourAccuracyTableBody.innerHTML = "";
+        if (this.elements.sevenAccuracyMeta) this.elements.sevenAccuracyMeta.textContent = "";
+        if (this.elements.fourAccuracyMeta) this.elements.fourAccuracyMeta.textContent = "";
+        if (this.elements.accuracyPlaceholder) this.elements.accuracyPlaceholder.style.display = "";
+        if (typeof this.toggleAccuracyControls === 'function') {
+            this.toggleAccuracyControls(false);
+        }
+    }
+
+    buildAccuracySummary() {
+        const summary = {};
+        if (this.latestSevenParameters) {
+            const seven = this.latestSevenParameters;
+            const residuals = Array.isArray(seven.residuals) ? seven.residuals : [];
+            const processed = residuals.map((item) => {
+                const vx = Number(item.vx) || 0;
+                const vy = Number(item.vy) || 0;
+                const vz = Number(item.vz) || 0;
+                return {
+                    name: item.name || "",
+                    vx,
+                    vy,
+                    vz,
+                    magnitude: Math.sqrt(vx * vx + vy * vy + vz * vz),
+                };
+            });
+            const rmse = seven.rmse || {};
+            const count = processed.length;
+            const maxMagnitude = count ? Math.max(...processed.map((item) => item.magnitude)) : null;
+            const maxComponent = count ? Math.max(...processed.map((item) => Math.max(Math.abs(item.vx), Math.abs(item.vy), Math.abs(item.vz)))) : null;
+            const avgMagnitude = count ? processed.reduce((sum, item) => sum + item.magnitude, 0) / count : null;
+            summary.seven = {
+                rmse,
+                residuals: processed,
+                count,
+                maxMagnitude,
+                maxComponent,
+                avgMagnitude,
+            };
+        } else {
+            summary.seven = null;
+        }
+        if (this.latestFourParameters) {
+            const four = this.latestFourParameters;
+            const residuals = Array.isArray(four.residuals) ? four.residuals : [];
+            const processed = residuals.map((item) => {
+                const vx = Number(item.vx) || 0;
+                const vy = Number(item.vy) || 0;
+                return {
+                    name: item.name || "",
+                    vx,
+                    vy,
+                    magnitude: Math.sqrt(vx * vx + vy * vy),
+                };
+            });
+            const rmse = four.rmse || {};
+            const count = processed.length;
+            const maxMagnitude = count ? Math.max(...processed.map((item) => item.magnitude)) : null;
+            const maxComponent = count ? Math.max(...processed.map((item) => Math.max(Math.abs(item.vx), Math.abs(item.vy)))) : null;
+            const avgMagnitude = count ? processed.reduce((sum, item) => sum + item.magnitude, 0) / count : null;
+            summary.four = {
+                rmse,
+                residuals: processed,
+                count,
+                maxMagnitude,
+                maxComponent,
+                avgMagnitude,
+            };
+        } else {
+            summary.four = null;
+        }
+        if (!summary.seven && !summary.four) {
+            return null;
+        }
+        return summary;
+    }
+
+    refreshAccuracyPanel() {
+        const summary = this.buildAccuracySummary();
+        this.latestAccuracy = summary;
+        if (!summary) {
+            this.resetAccuracyPanel();
+            return;
+        }
+        this.renderAccuracyPanel(summary);
+    }
+
+    renderAccuracyPanel(summary) {
+        if (!this.elements.accuracyWrapper) return;
+        if (this.elements.accuracyPlaceholder) {
+            this.elements.accuracyPlaceholder.style.display = "none";
+        }
+        if (typeof this.toggleAccuracyControls === 'function') {
+            this.toggleAccuracyControls(true);
+        } else {
+            this.elements.accuracyWrapper.classList.add('has-data');
+        }
+        if (summary.seven) {
+            const sevenRmse = summary.seven.rmse || {};
+            this.renderAccuracySummary(this.elements.sevenAccuracySummary, [
+                { label: "RMSE X", value: this.formatNumber(sevenRmse.x, 4) },
+                { label: "RMSE Y", value: this.formatNumber(sevenRmse.y, 4) },
+                { label: "RMSE Z", value: this.formatNumber(sevenRmse.z, 4) },
+                { label: "最大残差", value: this.formatNumber(summary.seven.maxMagnitude, 4) },
+                { label: "观测数", value: summary.seven.count }
+            ]);
+            if (this.elements.sevenAccuracyMeta) {
+                this.elements.sevenAccuracyMeta.textContent = `残差平均值：${this.formatNumber(summary.seven.avgMagnitude, 4) || '-'}`;
+            }
+            this.renderAccuracyTable(this.elements.sevenAccuracyTableBody, summary.seven.residuals, ["vx", "vy", "vz"]);
+        } else {
+            if (this.elements.sevenAccuracySummary) this.elements.sevenAccuracySummary.innerHTML = "暂无数据";
+            if (this.elements.sevenAccuracyTableBody) this.elements.sevenAccuracyTableBody.innerHTML = "";
+            if (this.elements.sevenAccuracyMeta) this.elements.sevenAccuracyMeta.textContent = "";
+        }
+        if (summary.four) {
+            const fourRmse = summary.four.rmse || {};
+            this.renderAccuracySummary(this.elements.fourAccuracySummary, [
+                { label: "RMSE X", value: this.formatNumber(fourRmse.x, 4) },
+                { label: "RMSE Y", value: this.formatNumber(fourRmse.y, 4) },
+                { label: "最大残差", value: this.formatNumber(summary.four.maxMagnitude, 4) },
+                { label: "观测数", value: summary.four.count }
+            ]);
+            if (this.elements.fourAccuracyMeta) {
+                this.elements.fourAccuracyMeta.textContent = `残差平均值：${this.formatNumber(summary.four.avgMagnitude, 4) || '-'}`;
+            }
+            this.renderAccuracyTable(this.elements.fourAccuracyTableBody, summary.four.residuals, ["vx", "vy"]);
+        } else {
+            if (this.elements.fourAccuracySummary) this.elements.fourAccuracySummary.innerHTML = "暂无数据";
+            if (this.elements.fourAccuracyTableBody) this.elements.fourAccuracyTableBody.innerHTML = "";
+            if (this.elements.fourAccuracyMeta) this.elements.fourAccuracyMeta.textContent = "";
+        }
+    }
+
+    renderAccuracySummary(container, metrics) {
+        if (!container) return;
+        const content = (metrics || []).map((item) => `
+            <div class="accuracy-metric">
+                <span class="metric-label">${item.label}</span>
+                <span class="metric-value">${item.value === undefined || item.value === null || item.value === '' ? '-' : item.value}</span>
+            </div>
+        `).join("");
+        container.innerHTML = content || '<span class="metric-empty">暂无数据</span>';
+    }
+
+    renderAccuracyTable(tbody, rows, columns) {
+        if (!tbody) return;
+        tbody.innerHTML = "";
+        if (!rows || !rows.length) return;
+        rows.forEach((row) => {
+            const tr = document.createElement("tr");
+            const nameCell = document.createElement("td");
+            nameCell.textContent = row.name || "-";
+            tr.appendChild(nameCell);
+            columns.forEach((col) => {
+                const td = document.createElement("td");
+                td.textContent = this.formatNumber(row[col], 4) || "-";
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
     }
 
     applySystemConfig(form, config = {}) {
@@ -320,6 +650,27 @@ class CoordinateUniversalApp {
                 el.dataset.auto = "true";
             }
         });
+        const ellipsoidSelect = form.querySelector(".ellipsoid-select");
+        const ellipsoidName = config.ellipsoid && config.ellipsoid.name;
+        if (ellipsoidSelect) {
+            if (ellipsoidName && ellipsoidSelect.querySelector('option[value="' + ellipsoidName + '"]')) {
+                ellipsoidSelect.value = ellipsoidName;
+                if (ellipsoidName === "__custom__") {
+                    this.unlockEllipsoidInputs(form);
+                } else {
+                    const record = (this.metadata.ellipsoids || []).find((item) => item.name === ellipsoidName);
+                    if (record) {
+                        this.applyEllipsoidRecord(form, record, { lock: true });
+                    } else {
+                        ellipsoidSelect.value = "__custom__";
+                        this.unlockEllipsoidInputs(form);
+                    }
+                }
+            } else {
+                ellipsoidSelect.value = "__custom__";
+                this.unlockEllipsoidInputs(form);
+            }
+        }
     }
     ensureInitialRows() {
         if (this.elements.commonBody && !this.elements.commonBody.children.length) {
@@ -343,6 +694,26 @@ class CoordinateUniversalApp {
         // 清空后添加一个空行
         this.addPointRow({});
     }
+
+    clearResults() {
+        if (this.elements.resultsBody) {
+            this.elements.resultsBody.innerHTML = "";
+        }
+        this.lastResults = [];
+        this.latestAccuracy = null;
+        this.resetAccuracyPanel();
+    }
+
+    clearAllTables() {
+        this.clearCommonPoints();
+        this.clearPoints();
+        this.clearResults();
+        if (typeof this.resetAccuracyPanel === "function") {
+            this.resetAccuracyPanel();
+        }
+        this.showMessage("已清空全部表格。", "info");
+    }
+
 
     collectCommonPoints() {
         if (!this.elements.commonBody) return [];
@@ -540,6 +911,7 @@ class CoordinateUniversalApp {
         if (Array.isArray(data.results)) {
             this.populateResults(data.results);
         }
+        this.refreshAccuracyPanel();
         this.showMessages(messages || []);
     }
 
@@ -574,6 +946,7 @@ class CoordinateUniversalApp {
     }
 
     updateSevenParameters(data) {
+        this.latestSevenParameters = data || null;
         const rotation = data.rotation_arcsec || {};
         const map = {
             dx: data.dx,
@@ -605,6 +978,7 @@ class CoordinateUniversalApp {
     }
 
     updateFourParameters(data) {
+        this.latestFourParameters = data || null;
         const map = {
             dx: data.dx,
             dy: data.dy,
@@ -718,6 +1092,27 @@ class CoordinateUniversalApp {
         }
     }
 
+    closeModal(modalId) {
+        if (!modalId) return;
+        if (modalId === "universalImportModal") {
+            this.closeImportModal();
+            return;
+        }
+        if (modalId === "coordinateExportModal") {
+            this.closeExportModal();
+            return;
+        }
+        if (modalId === "fieldMappingModal") {
+            this.closeFieldMappingModal();
+            return;
+        }
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.remove("show");
+            modal.style.display = "none";
+        }
+    }
+
     closeImportModal() {
         const modal = this.elements.importModal;
         if (modal) {
@@ -725,6 +1120,60 @@ class CoordinateUniversalApp {
             modal.style.display = "none";
         }
         this.resetImportModal();
+    }
+
+    closeExportModal() {
+        const modal = this.elements.exportModal;
+        if (modal) {
+            modal.classList.remove("show");
+            modal.style.display = "none";
+        }
+        this.resetExportModal(true);
+    }
+
+    resetExportModal(clearContext = true) {
+        if (clearContext) {
+            this.exportContext = null;
+        }
+        if (this.elements.exportFilename) {
+            this.elements.exportFilename.value = "";
+        }
+        if (this.elements.exportDecimals) {
+            this.elements.exportDecimals.value = 3;
+        }
+        if (this.elements.exportIncludeHeader) {
+            this.elements.exportIncludeHeader.checked = true;
+        }
+        if (this.elements.exportIncludeTimestamp) {
+            this.elements.exportIncludeTimestamp.checked = true;
+        }
+        if (this.elements.exportOptionsContainer) {
+            this.elements.exportOptionsContainer.innerHTML = "";
+        }
+        if (this.elements.exportOptionsSection) {
+            this.elements.exportOptionsSection.style.display = "none";
+        }
+        if (this.elements.exportDecimalsRow) {
+            this.elements.exportDecimalsRow.style.display = "";
+        }
+        if (this.elements.exportDecimalGroupsRow) {
+            this.elements.exportDecimalGroupsRow.style.display = "none";
+        }
+        if (this.elements.exportDecimalGrid) {
+            this.elements.exportDecimalGrid.innerHTML = "";
+        }
+        if (this.elements.exportDecimalHint) {
+            this.elements.exportDecimalHint.style.display = "none";
+        }
+        if (this.elements.exportHeaderToggle) {
+            this.elements.exportHeaderToggle.style.display = "";
+        }
+        if (this.elements.exportFormatContainer) {
+            const defaultOption = this.elements.exportFormatContainer.querySelector("input[name=\"coordinateExportFormat\"]");
+            if (defaultOption && !defaultOption.disabled) {
+                defaultOption.checked = true;
+            }
+        }
     }
 
     resetImportModal() {
@@ -1105,148 +1554,771 @@ class CoordinateUniversalApp {
             .join(separator);
     }
 
-    async requestExportFormat(title) {
-        const choice = window.prompt(`${title}\n请输入导出格式（txt/csv），默认为 txt：`, "txt");
-        if (!choice) return "txt";
-        const normalized = choice.trim().toLowerCase();
-        return normalized === "csv" ? "csv" : "txt";
+    openExportModal(context) {
+        if (!this.elements.exportModal) {
+            this.showMessage("未找到坐标导出模态框。", "error");
+            return;
+        }
+        const modalContext = { ...context };
+        this.resetExportModal(false);
+        this.exportContext = modalContext;
+        if (this.elements.exportTitle) {
+            this.elements.exportTitle.textContent = modalContext.title || "导出设置";
+        }
+        const allowedFormats = Array.isArray(modalContext.allowedFormats) && modalContext.allowedFormats.length
+            ? modalContext.allowedFormats
+            : ["txt", "dat", "csv", "excel", "word"];
+        this.configureExportFormats(allowedFormats, modalContext.preferredFormat || allowedFormats[0]);
+        if (this.elements.exportFilename) {
+            this.elements.exportFilename.value = modalContext.defaultFileName || "coordinate_export";
+        }
+        if (this.elements.exportIncludeTimestamp) {
+            this.elements.exportIncludeTimestamp.checked = modalContext.includeTimestamp !== false;
+        }
+        if (this.elements.exportIncludeHeader) {
+            if (this.elements.exportHeaderToggle) {
+                this.elements.exportHeaderToggle.style.display = modalContext.showHeaderToggle === false ? "none" : "";
+            }
+            this.elements.exportIncludeHeader.checked = modalContext.includeHeader !== false;
+        }
+        if (this.elements.exportDecimals) {
+            if (this.elements.exportDecimalsRow) {
+                this.elements.exportDecimalsRow.style.display = modalContext.showDecimals === false ? "none" : "";
+            }
+            this.elements.exportDecimals.value = modalContext.decimals ?? 3;
+        }
+        const decimalSettings = Array.isArray(modalContext.decimalSettings) ? modalContext.decimalSettings : [];
+        const decimalContext = modalContext.decimalContext || modalContext.mode || null;
+        this.exportContext.decimalContext = decimalContext;
+        const cachedOverrides = decimalContext && this.decimalOverrideCache ? this.decimalOverrideCache[decimalContext] || {} : {};
+        const providedOverrides = modalContext.decimalOverrides && typeof modalContext.decimalOverrides === 'object' ? modalContext.decimalOverrides : {};
+        const mergedOverrides = {};
+        if (decimalSettings.length) {
+            decimalSettings.forEach((setting) => {
+                const key = setting.id;
+                if (!key) return;
+                const defaultValue =
+                    providedOverrides[key] !== undefined
+                        ? providedOverrides[key]
+                        : cachedOverrides[key] !== undefined
+                            ? cachedOverrides[key]
+                            : setting.default ?? (modalContext.decimals ?? 3);
+                mergedOverrides[key] = defaultValue;
+            });
+        }
+        const effectiveOverrides = decimalSettings.length ? mergedOverrides : (Object.keys(providedOverrides).length ? providedOverrides : cachedOverrides);
+        this.exportContext.decimalOverrides = decimalSettings.length ? mergedOverrides : (Object.keys(effectiveOverrides).length ? effectiveOverrides : null);
+        this.renderDecimalSettings(decimalSettings, decimalSettings.length ? mergedOverrides : null);
+        this.renderExportOptions(modalContext.options || []);
+        const modal = this.elements.exportModal;
+        modal.style.display = "block";
+        modal.classList.add("show");
     }
 
-    async exportCommon() {
+
+    configureExportFormats(allowedFormats, preferredFormat) {
+        if (!this.elements.exportFormatContainer) return;
+        const radios = Array.from(
+            this.elements.exportFormatContainer.querySelectorAll('input[name="coordinateExportFormat"]')
+        );
+        let firstAvailable = null;
+        radios.forEach((radio) => {
+            const label = radio.closest(".format-option");
+            const allowed = !allowedFormats || allowedFormats.includes(radio.value);
+            radio.disabled = !allowed;
+            if (label) {
+                label.style.display = allowed ? "" : "none";
+            }
+            if (allowed && !firstAvailable) {
+                firstAvailable = radio;
+            }
+        });
+        let target = radios.find((radio) => radio.value === preferredFormat && !radio.disabled);
+        if (!target) {
+            target = radios.find((radio) => radio.checked && !radio.disabled) || firstAvailable;
+        }
+        if (target) {
+            target.checked = true;
+        }
+    }
+
+    renderExportOptions(options) {
+        const section = this.elements.exportOptionsSection;
+        const container = this.elements.exportOptionsContainer;
+        if (!section || !container) return;
+        container.innerHTML = "";
+        if (!options.length) {
+            section.style.display = "none";
+            return;
+        }
+        section.style.display = "";
+        options.forEach((option) => {
+            const wrapper = document.createElement("div");
+            wrapper.className = "export-option-item";
+            const label = document.createElement("label");
+            label.className = "inline-label";
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.dataset.optionId = option.id;
+            checkbox.checked = option.checked !== false;
+            label.appendChild(checkbox);
+            const textSpan = document.createElement("span");
+            textSpan.textContent = ` ${option.label}`;
+            label.appendChild(textSpan);
+            wrapper.appendChild(label);
+            if (option.description) {
+                const hint = document.createElement("small");
+                hint.className = "option-hint";
+                hint.textContent = option.description;
+                wrapper.appendChild(hint);
+            }
+            container.appendChild(wrapper);
+        });
+    }
+
+    renderDecimalSettings(settings, overrides) {
+        const row = this.elements.exportDecimalGroupsRow;
+        const grid = this.elements.exportDecimalGrid;
+        const hint = this.elements.exportDecimalHint;
+        if (!row || !grid) return;
+        grid.innerHTML = "";
+        if (!Array.isArray(settings) || !settings.length) {
+            row.style.display = "none";
+            if (hint) hint.style.display = "none";
+            return;
+        }
+        row.style.display = "";
+        if (hint) {
+            hint.style.display = "";
+        }
+        settings.forEach((setting) => {
+            const item = document.createElement("div");
+            item.className = "decimal-item";
+            const label = document.createElement("span");
+            label.className = "decimal-item-label";
+            label.textContent = setting.label || setting.id;
+            const input = document.createElement("input");
+            input.type = "number";
+            input.className = "decimal-item-input";
+            input.dataset.decimalId = setting.id;
+            input.min = setting.min ?? 0;
+            input.max = setting.max ?? 10;
+            input.step = setting.step ?? 1;
+            const defaultValue = overrides && overrides[setting.id] !== undefined
+                ? overrides[setting.id]
+                : setting.default ?? (this.exportContext?.decimals ?? 3);
+            input.value = defaultValue;
+            item.appendChild(label);
+            item.appendChild(input);
+            if (setting.hint) {
+                const note = document.createElement("small");
+                note.className = "decimal-item-hint";
+                note.textContent = setting.hint;
+                item.appendChild(note);
+            }
+            grid.appendChild(item);
+        });
+    }
+    getDecimalSettingsPreset(type) {
+        const preset = DECIMAL_SETTING_PRESETS[type] || [];
+        return preset.map((item) => ({ ...item }));
+    }
+
+
+
+
+
+    collectExportSettings() {
+        if (!this.exportContext) return null;
+        const formatInput = this.elements.exportFormatContainer
+            ? this.elements.exportFormatContainer.querySelector('input[name="coordinateExportFormat"]:checked')
+            : null;
+        if (!formatInput) {
+            this.showMessage("请选择导出格式。", "warning");
+            return null;
+        }
+        let fileName = this.elements.exportFilename?.value?.trim() || this.exportContext.defaultFileName || "coordinate_export";
+        let decimals = this.exportContext.decimals ?? 3;
+        if (this.exportContext.showDecimals !== false && this.elements.exportDecimals) {
+            const parsed = Number.parseInt(this.elements.exportDecimals.value, 10);
+            if (Number.isFinite(parsed)) {
+                decimals = Math.min(Math.max(parsed, 0), 10);
+            }
+        }
+        const includeHeader = this.exportContext.showHeaderToggle === false
+            ? true
+            : Boolean(this.elements.exportIncludeHeader?.checked);
+        const includeTimestamp = Boolean(this.elements.exportIncludeTimestamp?.checked);
+        const optionStates = {};
+        if (this.elements.exportOptionsContainer) {
+            this.elements.exportOptionsContainer
+                .querySelectorAll('input[type="checkbox"][data-option-id]')
+                .forEach((checkbox) => {
+                    optionStates[checkbox.dataset.optionId] = checkbox.checked;
+                });
+        }
+        let decimalOverrides = null;
+        if (this.elements.exportDecimalGrid) {
+            const entries = Array.from(this.elements.exportDecimalGrid.querySelectorAll('input[data-decimal-id]'));
+            if (entries.length) {
+                decimalOverrides = {};
+                entries.forEach((input) => {
+                    const key = input.dataset.decimalId;
+                    if (!key) return;
+                    const value = Number.parseInt(input.value, 10);
+                    if (Number.isFinite(value)) {
+                        const min = Number.isFinite(Number(input.min)) ? Number(input.min) : 0;
+                        const max = Number.isFinite(Number(input.max)) ? Number(input.max) : 12;
+                        decimalOverrides[key] = Math.min(Math.max(value, min), max);
+                    }
+                });
+                if (!Object.keys(decimalOverrides).length) {
+                    decimalOverrides = null;
+                }
+            }
+        }
+        return {
+            format: formatInput.value,
+            fileName,
+            decimals,
+            includeHeader,
+            includeTimestamp,
+            options: optionStates,
+            decimalOverrides,
+        };
+    }
+
+    confirmExport() {
+        if (!this.exportContext) {
+            this.closeExportModal();
+            return;
+        }
+        const settings = this.collectExportSettings();
+        if (!settings) return;
+        if (this.exportContext.decimalContext) {
+            if (settings.decimalOverrides) {
+                this.decimalOverrideCache[this.exportContext.decimalContext] = settings.decimalOverrides;
+            } else {
+                delete this.decimalOverrideCache[this.exportContext.decimalContext];
+            }
+        }
+        this.exportContext.decimalOverrides = settings.decimalOverrides;
+        try {
+            if (this.exportContext.mode === "report") {
+                this.performReportExport(this.exportContext, settings);
+            } else {
+                this.performTableExport(this.exportContext, settings);
+            }
+            this.showMessage(`成功导出为 ${settings.format.toUpperCase()} 格式`, "success");
+        } catch (error) {
+            console.error("导出失败:", error);
+            this.showMessage(`导出失败：${error.message}`, "error");
+        } finally {
+            this.closeExportModal();
+        }
+    }
+
+    getCommonDataset(points) {
+        return {
+            columns: [
+                { key: "name", label: "点名" },
+                { key: "source.B", label: "源B(°)", formatKey: "angle" },
+                { key: "source.L", label: "源L(°)", formatKey: "angle" },
+                { key: "source.H", label: "源H(m)", formatKey: "height" },
+                { key: "source.X", label: "源X(m)", formatKey: "cartesian" },
+                { key: "source.Y", label: "源Y(m)", formatKey: "cartesian" },
+                { key: "source.Z", label: "源Z(m)", formatKey: "cartesian" },
+                { key: "source.x", label: "源x(m)", formatKey: "plane" },
+                { key: "source.y", label: "源y(m)", formatKey: "plane" },
+                { key: "source.h", label: "源h(m)", formatKey: "height" },
+                { key: "target.B", label: "目标B(°)", formatKey: "angle" },
+                { key: "target.L", label: "目标L(°)", formatKey: "angle" },
+                { key: "target.H", label: "目标H(m)", formatKey: "height" },
+                { key: "target.X", label: "目标X(m)", formatKey: "cartesian" },
+                { key: "target.Y", label: "目标Y(m)", formatKey: "cartesian" },
+                { key: "target.Z", label: "目标Z(m)", formatKey: "cartesian" },
+                { key: "target.x", label: "目标x(m)", formatKey: "plane" },
+                { key: "target.y", label: "目标y(m)", formatKey: "plane" },
+                { key: "target.h", label: "目标h(m)", formatKey: "height" },
+            ],
+            rows: points,
+        };
+    }
+
+    getPendingDataset(points) {
+        return {
+            columns: [
+                { key: "name", label: "点名" },
+                { key: "B", label: "B(°)", formatKey: "angle" },
+                { key: "L", label: "L(°)", formatKey: "angle" },
+                { key: "H", label: "H(m)", formatKey: "height" },
+                { key: "X", label: "X(m)", formatKey: "cartesian" },
+                { key: "Y", label: "Y(m)", formatKey: "cartesian" },
+                { key: "Z", label: "Z(m)", formatKey: "cartesian" },
+                { key: "x", label: "x(m)", formatKey: "plane" },
+                { key: "y", label: "y(m)", formatKey: "plane" },
+                { key: "h", label: "h(m)", formatKey: "height" },
+            ],
+            rows: points,
+        };
+    }
+
+    getResultsDataset(results) {
+        return {
+            columns: [
+                { key: "name", label: "点名" },
+                { key: "target.B", label: "B(°)", numeric: true, decimals: 8, formatKey: "angle" },
+                { key: "target.L", label: "L(°)", numeric: true, decimals: 8, formatKey: "angle" },
+                { key: "target.H", label: "H(m)", numeric: true, decimals: 3, formatKey: "height" },
+                { key: "target.X", label: "X(m)", numeric: true, decimals: 3, formatKey: "cartesian" },
+                { key: "target.Y", label: "Y(m)", numeric: true, decimals: 3, formatKey: "cartesian" },
+                { key: "target.Z", label: "Z(m)", numeric: true, decimals: 3, formatKey: "cartesian" },
+                { key: "target.x", label: "x(m)", numeric: true, decimals: 3, formatKey: "plane" },
+                { key: "target.y", label: "y(m)", numeric: true, decimals: 3, formatKey: "plane" },
+                { key: "target.h", label: "h(m)", numeric: true, decimals: 3, formatKey: "height" },
+                { key: "error", label: "备注" },
+            ],
+            rows: results,
+        };
+    }
+
+    exportCommon() {
         const points = this.collectCommonPoints();
         if (!points.length) {
             this.showMessage("当前没有公共点数据。", "warning");
             return;
         }
-        const format = await this.requestExportFormat("导出公共点数据");
-        const separator = format === "txt" ? "\t" : ",";
-        const header = [
-            "点名",
-            "B(°)",
-            "L(°)",
-            "H(m)",
-            "X(m)",
-            "Y(m)",
-            "Z(m)",
-            "x(m)",
-            "y(m)",
-            "h(m)",
-            "B(°)",
-            "L(°)",
-            "H(m)",
-            "X(m)",
-            "Y(m)",
-            "Z(m)",
-            "x(m)",
-            "y(m)",
-            "h(m)",
-        ];
-        const lines = [this.formatDelimitedRow(header, separator)];
-        points.forEach((point) => {
-            const source = point.source || {};
-            const target = point.target || {};
-            lines.push(
-                this.formatDelimitedRow(
-                    [
-                        point.name || "",
-                        source.B ?? "",
-                        source.L ?? "",
-                        source.H ?? "",
-                        source.X ?? "",
-                        source.Y ?? "",
-                        source.Z ?? "",
-                        source.x ?? "",
-                        source.y ?? "",
-                        source.h ?? "",
-                        target.B ?? "",
-                        target.L ?? "",
-                        target.H ?? "",
-                        target.X ?? "",
-                        target.Y ?? "",
-                        target.Z ?? "",
-                        target.x ?? "",
-                        target.y ?? "",
-                        target.h ?? "",
-                    ],
-                    separator,
-                ),
-            );
+        this.openExportModal({
+            mode: "table",
+            title: "导出公共点数据",
+            defaultFileName: "common_points",
+            dataset: this.getCommonDataset(points),
+            decimals: 3,
+            includeHeader: true,
+            allowedFormats: ["txt", "dat", "csv", "excel"],
+            decimalSettings: this.getDecimalSettingsPreset("table"),
+            decimalContext: "commonTable",
         });
-        const filename = `common_points_${this.makeTimestamp()}.${format}`;
-        const mime = format === "txt" ? "text/plain;charset=utf-8" : "text/csv;charset=utf-8";
-        this.downloadTextFile(lines.join("\n"), filename, mime);
-        this.showMessage(`公共点已导出为 ${format.toUpperCase()}。`, "success");
     }
 
-    async exportPoints() {
+    exportPoints() {
         const points = this.collectPoints(false);
         if (!points.length) {
             this.showMessage("当前没有待转换点数据。", "warning");
             return;
         }
-        const format = await this.requestExportFormat("导出待转换点数据");
-        const separator = format === "txt" ? "\t" : ",";
-        const header = ["点名", "B(°)", "L(°)", "H(m)", "X(m)", "Y(m)", "Z(m)", "x(m)", "y(m)", "h(m)"];
-        const lines = [this.formatDelimitedRow(header, separator)];
-        points.forEach((point) => {
-            lines.push(
-                this.formatDelimitedRow(
-                    [
-                        point.name ?? "",
-                        point.B ?? "",
-                        point.L ?? "",
-                        point.H ?? "",
-                        point.X ?? "",
-                        point.Y ?? "",
-                        point.Z ?? "",
-                        point.x ?? "",
-                        point.y ?? "",
-                        point.h ?? "",
-                    ],
-                    separator,
-                ),
-            );
+        this.openExportModal({
+            mode: "table",
+            title: "导出待转换点数据",
+            defaultFileName: "pending_points",
+            dataset: this.getPendingDataset(points),
+            decimals: 3,
+            includeHeader: true,
+            allowedFormats: ["txt", "dat", "csv", "excel"],
+            decimalSettings: this.getDecimalSettingsPreset("table"),
+            decimalContext: "pendingTable",
         });
-        const filename = `pending_points_${this.makeTimestamp()}.${format}`;
-        const mime = format === "txt" ? "text/plain;charset=utf-8" : "text/csv;charset=utf-8";
-        this.downloadTextFile(lines.join("\n"), filename, mime);
-        this.showMessage(`待转换点已导出为 ${format.toUpperCase()}。`, "success");
     }
 
-    async exportResults() {
+    exportResults() {
         if (!this.lastResults.length) {
             this.showMessage("当前没有可导出的转换结果。", "warning");
             return;
         }
-        const format = await this.requestExportFormat("导出转换结果");
-        const separator = format === "txt" ? "\t" : ",";
-        const header = ["点名", "B(°)", "L(°)", "H(m)", "X(m)", "Y(m)", "Z(m)", "x(m)", "y(m)", "h(m)", "备注"];
-        const lines = [this.formatDelimitedRow(header, separator)];
-        this.lastResults.forEach((item) => {
-            const target = item.target || {};
-            lines.push(
-                this.formatDelimitedRow(
-                    [
-                        item.name || "",
-                        this.formatNumber(target.B, 8),
-                        this.formatNumber(target.L, 8),
-                        this.formatNumber(target.H, 3),
-                        this.formatNumber(target.X, 3),
-                        this.formatNumber(target.Y, 3),
-                        this.formatNumber(target.Z, 3),
-                        this.formatNumber(target.x, 3),
-                        this.formatNumber(target.y, 3),
-                        this.formatNumber(target.h, 3),
-                        item.error || "",
-                    ],
-                    separator,
-                ),
-            );
+        this.openExportModal({
+            mode: "table",
+            title: "导出转换结果",
+            defaultFileName: "conversion_results",
+            dataset: this.getResultsDataset(this.lastResults),
+            decimals: 3,
+            includeHeader: true,
+            allowedFormats: ["txt", "dat", "csv", "excel"],
+            decimalSettings: this.getDecimalSettingsPreset("table"),
+            decimalContext: "resultsTable",
         });
-        const filename = `conversion_results_${this.makeTimestamp()}.${format}`;
-        const mime = format === "txt" ? "text/plain;charset=utf-8" : "text/csv;charset=utf-8";
-        this.downloadTextFile(lines.join("\n"), filename, mime);
-        this.showMessage(`转换结果已导出为 ${format.toUpperCase()}。`, "success");
+    }
+
+    initiateReportExport() {
+        const common = this.collectCommonPoints();
+        const pending = this.collectPoints(false);
+        const results = this.lastResults || [];
+        if (!common.length && !pending.length && !results.length) {
+            this.showMessage("暂无可生成报告的数据，请先进行计算。", "warning");
+            return;
+        }
+        this.openExportModal({
+            mode: "report",
+            title: "导出综合转换报告",
+            defaultFileName: "coordinate_report",
+            allowedFormats: ["word", "excel", "txt"],
+            includeHeader: true,
+            includeTimestamp: true,
+            showDecimals: true,
+            showHeaderToggle: false,
+            decimals: 3,
+            decimalSettings: this.getDecimalSettingsPreset("report"),
+            decimalContext: "report",
+            options: [
+                { id: "includeOverview", label: "包含基础信息", checked: true },
+                { id: "includeParameters", label: "包含参数估计结果", checked: true },
+                { id: "includeCommon", label: "包含公共点列表", checked: common.length > 0 },
+                { id: "includePending", label: "包含待转换点列表", checked: pending.length > 0 },
+                { id: "includeResults", label: "包含转换结果", checked: results.length > 0 },
+                { id: "includeAccuracy", label: "包含精度评定", checked: Boolean(this.latestAccuracy) },
+            ],
+        });
+    }
+
+    performTableExport(context, settings) {
+        const { headers, rows } = this.buildTableMatrix(context.dataset, settings.decimals, settings.decimalOverrides);
+        const baseName = settings.fileName;
+        const includeHeader = settings.includeHeader !== false;
+        if (["txt", "dat", "csv"].includes(settings.format)) {
+            const separator = settings.format === "csv" ? "," : "\t";
+            const lines = [];
+            if (includeHeader) {
+                lines.push(this.formatDelimitedRow(headers, separator));
+            }
+            rows.forEach((row) => {
+                lines.push(this.formatDelimitedRow(row, separator));
+            });
+            const extension = settings.format;
+            const mime = settings.format === "csv" ? "text/csv;charset=utf-8" : "text/plain;charset=utf-8";
+            this.downloadTextFile(
+                lines.join("\n"),
+                this.buildFileName(baseName, settings.includeTimestamp, extension),
+                mime
+            );
+            return;
+        }
+        if (settings.format === "excel") {
+            const html = this.buildExcelDocument(context.title, headers, rows, includeHeader);
+            this.downloadFile(
+                html,
+                this.buildFileName(baseName, settings.includeTimestamp, "xls"),
+                "application/vnd.ms-excel;charset=utf-8"
+            );
+            return;
+        }
+        if (settings.format === "word") {
+            const html = this.buildWordDocument(context.title, headers, rows, includeHeader);
+            this.downloadFile(
+                html,
+                this.buildFileName(baseName, settings.includeTimestamp, "doc"),
+                "application/msword;charset=utf-8"
+            );
+            return;
+        }
+        throw new Error("暂不支持的导出格式");
+    }
+
+    performReportExport(context, settings) {
+        const data = this.buildReportData();
+        const opts = settings.options || {};
+        const include = {
+            overview: opts.includeOverview !== false,
+            parameters: opts.includeParameters !== false,
+            common: opts.includeCommon !== false,
+            pending: opts.includePending !== false,
+            results: opts.includeResults !== false,
+            accuracy: opts.includeAccuracy !== false,
+        };
+        const sections = this.createReportSections(data, include, settings.decimals, settings.decimalOverrides);
+        if (!sections.length) {
+            this.showMessage("报告内容为空，已取消导出。", "warning");
+            return;
+        }
+        const title = context.title || "综合坐标转换报告";
+        if (settings.format === "excel") {
+            const html = this.buildReportExcelDocument(title, sections);
+            this.downloadFile(
+                html,
+                this.buildFileName(settings.fileName, settings.includeTimestamp, "xls"),
+                "application/vnd.ms-excel;charset=utf-8"
+            );
+            return;
+        }
+        if (settings.format === "txt") {
+            const reportText = this.buildReportTextDocument(title, sections);
+            this.downloadTextFile(
+                reportText,
+                this.buildFileName(settings.fileName, settings.includeTimestamp, "txt"),
+                "text/plain;charset=utf-8"
+            );
+            return;
+        }
+        if (settings.format === "word") {
+            const html = this.buildReportWordDocument(title, sections);
+            this.downloadFile(
+                html,
+                this.buildFileName(settings.fileName, settings.includeTimestamp, "doc"),
+                "application/msword;charset=utf-8"
+            );
+            return;
+        }
+        throw new Error("暂不支持的报告导出格式");
+    }
+
+    buildReportData() {
+        return {
+            generatedAt: new Date(),
+            sourceSystem: this.collectSystemConfig(this.elements.sourceForm),
+            targetSystem: this.collectSystemConfig(this.elements.targetForm),
+            sevenParameters: this.latestSevenParameters,
+            fourParameters: this.latestFourParameters,
+            commonPoints: this.collectCommonPoints(),
+            pendingPoints: this.collectPoints(false),
+            results: this.lastResults || [],
+            accuracy: this.latestAccuracy,
+        };
+    }
+
+    createReportSections(data, include, decimals, decimalOverrides = {}) {
+        const overrides = decimalOverrides && typeof decimalOverrides === "object" ? decimalOverrides : {};
+        const sections = [];
+        if (include.overview) {
+            sections.push({
+                title: "总体信息",
+                type: "table",
+                headers: ["项目", "数值"],
+                rows: [
+                    ["生成时间", data.generatedAt.toLocaleString()],
+                    ["公共点数量", data.commonPoints.length],
+                    ["待转换点数量", data.pendingPoints.length],
+                    ["成果点数量", data.results.length],
+                ],
+            });
+        }
+        if (include.parameters && (data.sevenParameters || data.fourParameters)) {
+            const seven = data.sevenParameters || {};
+            const four = data.fourParameters || {};
+            const sevenRotation = seven.rotation_arcsec || {};
+            const translationDecimals = this.resolveDecimalValue(6, overrides, "parameterTranslation");
+            const rotationDecimals = this.resolveDecimalValue(6, overrides, "parameterRotation");
+            const scaleDecimals = this.resolveDecimalValue(6, overrides, "parameterScale");
+            sections.push({
+                title: "七参数解算结果",
+                type: "table",
+                headers: ["指标", "取值"],
+                rows: [
+                    ["ΔX (m)", this.formatNumber(seven.dx, translationDecimals)],
+                    ["ΔY (m)", this.formatNumber(seven.dy, translationDecimals)],
+                    ["ΔZ (m)", this.formatNumber(seven.dz, translationDecimals)],
+                    ["Rx (″)", this.formatNumber(sevenRotation.rx, rotationDecimals)],
+                    ["Ry (″)", this.formatNumber(sevenRotation.ry, rotationDecimals)],
+                    ["Rz (″)", this.formatNumber(sevenRotation.rz, rotationDecimals)],
+                    ["尺度 (ppm)", this.formatNumber(seven.scale_ppm, scaleDecimals)],
+                ],
+            });
+            sections.push({
+                title: "四参数解算结果",
+                type: "table",
+                headers: ["指标", "取值"],
+                rows: [
+                    ["ΔX (m)", this.formatNumber(four.dx, translationDecimals)],
+                    ["ΔY (m)", this.formatNumber(four.dy, translationDecimals)],
+                    ["旋转(″)", this.formatNumber(four.rotation_arcsec, rotationDecimals)],
+                    ["尺度 (ppm)", this.formatNumber(four.scale_ppm, scaleDecimals)],
+                ],
+            });
+        }
+        if (include.common && data.commonPoints.length) {
+            const dataset = this.getCommonDataset(data.commonPoints);
+            const { headers, rows } = this.buildTableMatrix(dataset, decimals, overrides);
+            sections.push({ title: "公共点列表", type: "table", headers, rows });
+        }
+        if (include.pending && data.pendingPoints.length) {
+            const dataset = this.getPendingDataset(data.pendingPoints);
+            const { headers, rows } = this.buildTableMatrix(dataset, decimals, overrides);
+            sections.push({ title: "待转换点列表", type: "table", headers, rows });
+        }
+        if (include.results && data.results.length) {
+            const dataset = this.getResultsDataset(data.results);
+            const { headers, rows } = this.buildTableMatrix(dataset, decimals, overrides);
+            sections.push({ title: "转换成果", type: "table", headers, rows });
+        }
+        if (include.accuracy && data.accuracy) {
+            const accuracyDecimals = this.resolveDecimalValue(4, overrides, "accuracy");
+            const accuracyRows = [];
+            if (data.accuracy.seven) {
+                const seven = data.accuracy.seven;
+                const sevenRmse = seven.rmse || {};
+                accuracyRows.push(["七参数RMSE X", this.formatNumber(sevenRmse.x, accuracyDecimals)]);
+                accuracyRows.push(["七参数RMSE Y", this.formatNumber(sevenRmse.y, accuracyDecimals)]);
+                accuracyRows.push(["七参数RMSE Z", this.formatNumber(sevenRmse.z, accuracyDecimals)]);
+                if (seven.maxResidual !== undefined) {
+                    accuracyRows.push(["七参数最大残差", this.formatNumber(seven.maxResidual, accuracyDecimals)]);
+                }
+            }
+            if (data.accuracy.four) {
+                const four = data.accuracy.four;
+                const fourRmse = four.rmse || {};
+                accuracyRows.push(["四参数RMSE X", this.formatNumber(fourRmse.x, accuracyDecimals)]);
+                accuracyRows.push(["四参数RMSE Y", this.formatNumber(fourRmse.y, accuracyDecimals)]);
+                if (four.maxResidual !== undefined) {
+                    accuracyRows.push(["四参数最大残差", this.formatNumber(four.maxResidual, accuracyDecimals)]);
+                }
+            }
+            if (accuracyRows.length) {
+                sections.push({
+                    title: "精度指标",
+                    type: "table",
+                    headers: ["指标", "数值"],
+                    rows: accuracyRows,
+                });
+            }
+        }
+        return sections;
+    }
+
+
+    buildTableMatrix(dataset, decimals, decimalOverrides = {}) {
+        const columns = dataset.columns || [];
+        const overrideMap = decimalOverrides && typeof decimalOverrides === 'object' ? decimalOverrides : {};
+        const rows = (dataset.rows || []).map((row) =>
+            columns.map((col) => {
+                const rawValue = typeof col.value === 'function' ? col.value(row) : this.resolveDatasetValue(row, col.key);
+                if (typeof col.format === 'function') {
+                    return col.format(rawValue, row, col);
+                }
+                const overrideDecimals = col.formatKey && Object.prototype.hasOwnProperty.call(overrideMap, col.formatKey)
+                    ? overrideMap[col.formatKey]
+                    : undefined;
+                const columnDecimals = overrideDecimals !== undefined
+                    ? overrideDecimals
+                    : col.decimals !== undefined
+                        ? col.decimals
+                        : decimals;
+                return this.formatValue(rawValue, columnDecimals, col.numeric === true);
+            })
+        );
+        const headers = columns.map((col) => col.label || col.key || '');
+        return { headers, rows };
+    }
+
+
+    resolveDecimalValue(defaultValue, overrides, key) {
+        if (overrides && key && Object.prototype.hasOwnProperty.call(overrides, key)) {
+            const parsed = Number(overrides[key]);
+            if (Number.isFinite(parsed)) {
+                return parsed;
+            }
+        }
+        return defaultValue;
+    }
+
+    resolveDatasetValue(row, path) {
+        if (!path) return row;
+        return path.split(".").reduce((acc, key) => {
+            if (acc && Object.prototype.hasOwnProperty.call(acc, key)) {
+                return acc[key];
+            }
+            return null;
+        }, row);
+    }
+
+    formatValue(value, decimals, numeric) {
+        if (value === undefined || value === null || value === "") return "";
+        if (numeric) {
+            const num = Number(value);
+            if (Number.isFinite(num)) {
+                return this.formatNumber(num, decimals);
+            }
+        }
+        if (typeof value === "number") {
+            return this.formatNumber(value, decimals);
+        }
+        return String(value);
+    }
+
+    buildFileName(baseName, includeTimestamp, extension) {
+        const sanitized = (baseName || "coordinate_export").replace(/[\\/:*?"<>|]/g, "_");
+        const stamp = includeTimestamp ? `_${this.makeTimestamp()}` : "";
+        return `${sanitized}${stamp}.${extension}`;
+    }
+
+    buildTableHtml(title, headers, rows, includeHeader = true) {
+        const headerHtml = includeHeader
+            ? `<tr>${headers.map((text) => `<th>${this.escapeHtml(text)}</th>`).join("")}</tr>`
+            : "";
+        const bodyHtml = rows
+            .map((row) => `<tr>${row.map((cell) => `<td>${this.escapeHtml(cell)}</td>`).join("")}</tr>`)
+            .join("");
+        return `<table class="report-table">${headerHtml}${bodyHtml}</table>`;
+    }
+
+    buildExcelDocument(title, headers, rows, includeHeader) {
+        const table = this.buildTableHtml(title, headers, rows, includeHeader);
+        return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Segoe UI,Arial,sans-serif;}h2{margin:12px 0;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #999;padding:6px 8px;text-align:center;}th{background:#e6f2ff;}</style></head><body>${title ? `<h2>${this.escapeHtml(title)}</h2>` : ""}${table}</body></html>`;
+    }
+
+    buildWordDocument(title, headers, rows, includeHeader) {
+        const table = this.buildTableHtml(title, headers, rows, includeHeader);
+        return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:\"Microsoft YaHei\",Segoe UI,sans-serif;margin:24px;}h1{font-size:22px;margin-bottom:16px;color:#1e40af;}table{border-collapse:collapse;width:100%;margin:16px 0;}th,td{border:1px solid #b6c2d9;padding:8px 10px;text-align:center;}th{background:#e0ecff;font-weight:600;}section{margin-bottom:24px;}section h2{font-size:18px;margin-bottom:8px;color:#374151;}small.option-hint{color:#6b7280;display:block;margin-top:4px;}</style></head><body><h1>${this.escapeHtml(title || "综合坐标转换报告")}</h1>${table}</body></html>`;
+    }
+
+    buildReportExcelDocument(title, sections) {
+        const sectionHtml = sections
+            .map((section) => {
+                if (section.type === "table") {
+                    const table = this.buildTableHtml(section.title, section.headers, section.rows, true);
+                    return `${section.title ? `<h2>${this.escapeHtml(section.title)}</h2>` : ""}${table}`;
+                }
+                return section.content || "";
+            })
+            .join("");
+        return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Segoe UI,Arial,sans-serif;}h1{font-size:22px;margin-bottom:16px;}h2{font-size:18px;margin:18px 0 8px;}table{border-collapse:collapse;width:100%;margin-bottom:12px;}th,td{border:1px solid #999;padding:6px 8px;text-align:center;}th{background:#e6f2ff;}</style></head><body><h1>${this.escapeHtml(title)}</h1>${sectionHtml}</body></html>`;
+    }
+
+    buildReportTextDocument(title, sections) {
+        const lines = [];
+        const header = title || "综合坐标转换报告";
+        lines.push(header);
+        lines.push("=".repeat(header.length));
+        (sections || []).forEach((section, index) => {
+            lines.push("");
+            const sectionTitle = section.title ? `${index + 1}. ${section.title}` : `${index + 1}.`;
+            lines.push(sectionTitle);
+            if (section.type === "table" && Array.isArray(section.rows)) {
+                const headers = Array.isArray(section.headers) ? section.headers : [];
+                if (headers.length) {
+                    lines.push(headers.join("\t"));
+                }
+                section.rows.forEach((row) => {
+                    const cells = Array.isArray(row) ? row : [row];
+                    lines.push(
+                        cells
+                            .map((cell) => (cell === undefined || cell === null ? "" : String(cell)))
+                            .join("\t")
+                    );
+                });
+            } else if (section.content) {
+                lines.push(section.content);
+            }
+        });
+        return lines.join("\n");
+    }
+    buildReportWordDocument(title, sections) {
+        const sectionHtml = sections
+            .map((section) => {
+                if (section.type === "table") {
+                    const table = this.buildTableHtml(section.title, section.headers, section.rows, true);
+                    return `<section><h2>${this.escapeHtml(section.title)}</h2>${table}</section>`;
+                }
+                return `<section>${section.content || ""}</section>`;
+            })
+            .join("");
+        return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:\"Microsoft YaHei\",Segoe UI,sans-serif;margin:32px 40px;color:#1f2933;line-height:1.6;}h1{font-size:26px;margin-bottom:18px;color:#1e3a8a;}h2{font-size:20px;margin:24px 0 12px;color:#1f2937;}table{border-collapse:collapse;width:100%;margin-bottom:16px;}th,td{border:1px solid #cbd5f5;padding:8px 10px;text-align:center;}th{background:#eff6ff;font-weight:600;}p{margin:6px 0;}</style></head><body><h1>${this.escapeHtml(title)}</h1>${sectionHtml}</body></html>`;
+    }
+
+    escapeHtml(value) {
+        if (value === null || value === undefined) return "";
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
     }
 
     formatNumber(value, decimals) {
@@ -1257,7 +2329,11 @@ class CoordinateUniversalApp {
     }
 
     downloadTextFile(content, filename, mime) {
-        const blob = new Blob([content], { type: mime });
+        this.downloadFile(content, filename, mime || "text/plain;charset=utf-8");
+    }
+
+    downloadFile(content, filename, mimeType = "application/octet-stream") {
+        const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -2074,7 +3150,7 @@ class CoordinateUniversalApp {
         }
     }
 
-    // ʹ��ӳ�������ת��������
+    // 使用字段映射解析待转换点数据
     parsePointImportWithMapping(mappedValues) {
         try {
             const getValue = (index) => {
@@ -2103,7 +3179,7 @@ class CoordinateUniversalApp {
         }
     }
 
-    // ʹ��ӳ������������
+    // 使用字段映射解析成果数据
     parseResultsImportWithMapping(mappedValues) {
         try {
             const getValue = (index) => {
@@ -2152,3 +3228,4 @@ class CoordinateUniversalApp {
 document.addEventListener("DOMContentLoaded", () => {
     window.coordinateUniversalApp = new CoordinateUniversalApp();
 });
+

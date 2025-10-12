@@ -201,7 +201,11 @@
                     <div class="content-header">
                         <h2 id="coordinate-function-title">综合坐标转换</h2>
                         <div class="header-tools">
-                            <button class="tool-btn primary" id="universal-compute-all"><i class="fas fa-play-circle"></i> 全面计算</button>
+                            <div class="coordinate-action-card">
+                                <button class="tool-btn" id="universal-export-report"><i class="fas fa-file-signature"></i> 导出报告</button>
+                                <button class="tool-btn" id="universal-clear-all"><i class="fas fa-broom"></i> 清空全部</button>
+                                <button class="tool-btn primary" id="universal-compute-all"><i class="fas fa-play-circle"></i> 全面计算</button>
+                            </div>
                         </div>
                     </div>
 
@@ -478,6 +482,64 @@
                             </div>
                         </section>
 
+                        <section class="panel" id="accuracy-panel">
+                            <div class="panel-header">
+                                <h3><i class="fas fa-chart-line"></i> 精度评定</h3>
+                            </div>
+                            <div class="accuracy-content" id="accuracy-content">
+                                <div class="accuracy-controls">
+                                    <label for="accuracy-split-slider"><i class="fas fa-sliders-h"></i> 上下布局比例调整</label>
+                                    <input type="range" id="accuracy-split-slider" min="30" max="70" value="50">
+                                    <span class="accuracy-split-display" id="accuracy-split-display">50% / 50%</span>
+                                </div>
+                                <div class="accuracy-stack" id="accuracy-stack">
+                                    <div class="accuracy-pane" data-pane="seven">
+                                        <div class="accuracy-card" id="seven-accuracy-card">
+                                            <div class="accuracy-card-header">
+                                                <h4><i class="fas fa-cube"></i> 七参数精度总览</h4>
+                                                <span class="accuracy-meta" id="seven-accuracy-meta"></span>
+                                            </div>
+                                            <div class="accuracy-summary" id="seven-accuracy-summary"></div>
+                                            <table class="data-table compact" id="seven-accuracy-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>指标</th>
+                                                        <th>Vx (m)</th>
+                                                        <th>Vy (m)</th>
+                                                        <th>Vz (m)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <div class="accuracy-pane" data-pane="four">
+                                        <div class="accuracy-card" id="four-accuracy-card">
+                                            <div class="accuracy-card-header">
+                                                <h4><i class="fas fa-ruler-combined"></i> 四参数精度总览</h4>
+                                                <span class="accuracy-meta" id="four-accuracy-meta"></span>
+                                            </div>
+                                            <div class="accuracy-summary" id="four-accuracy-summary"></div>
+                                            <table class="data-table compact" id="four-accuracy-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>指标</th>
+                                                        <th>Vx (m)</th>
+                                                        <th>Vy (m)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="accuracy-placeholder" id="accuracy-placeholder">
+                                    <i class="fas fa-clipboard-check"></i>
+                                    <p>计算完成后将在此展示七参数与四参数的精度指标及残差明细。</p>
+                                </div>
+                            </div>
+                        </section>
+
                         <section class="panel" id="diagnostics-panel">
                             <div class="panel-header">
                                 <h3><i class="fas fa-info-circle"></i> 诊断信息</h3>
@@ -515,6 +577,91 @@
                         <div class="modal-footer">
                             <button class="tool-btn" data-close-modal="universalImportModal">取消</button>
                             <button class="tool-btn primary" id="universal-import-confirm">导入</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 坐标模块导出设置弹窗 -->
+                <div class="modal" id="coordinateExportModal">
+                    <div class="modal-content modal-medium">
+                        <div class="modal-header">
+                            <h3 id="coordinate-export-title"><i class="fas fa-file-export"></i> 导出设置</h3>
+                            <button class="modal-close" data-close-modal="coordinateExportModal">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="export-section">
+                                <h4>导出格式</h4>
+                                <div class="format-grid" id="coordinate-export-format">
+                                    <label class="format-option">
+                                        <input type="radio" name="coordinateExportFormat" value="txt" checked>
+                                        <span class="format-label">
+                                            <i class="fas fa-file-alt"></i>
+                                            <strong>TXT文本</strong>
+                                            <small>制表符分隔</small>
+                                        </span>
+                                    </label>
+                                    <label class="format-option">
+                                        <input type="radio" name="coordinateExportFormat" value="dat">
+                                        <span class="format-label">
+                                            <i class="fas fa-database"></i>
+                                            <strong>DAT数据</strong>
+                                            <small>标准数值格式</small>
+                                        </span>
+                                    </label>
+                                    <label class="format-option">
+                                        <input type="radio" name="coordinateExportFormat" value="csv">
+                                        <span class="format-label">
+                                            <i class="fas fa-table"></i>
+                                            <strong>CSV表格</strong>
+                                            <small>逗号分隔</small>
+                                        </span>
+                                    </label>
+                                    <label class="format-option">
+                                        <input type="radio" name="coordinateExportFormat" value="excel">
+                                        <span class="format-label">
+                                            <i class="fas fa-file-excel"></i>
+                                            <strong>Excel工作簿</strong>
+                                            <small>兼容.xls</small>
+                                        </span>
+                                    </label>
+                                    <label class="format-option">
+                                        <input type="radio" name="coordinateExportFormat" value="word">
+                                        <span class="format-label">
+                                            <i class="fas fa-file-word"></i>
+                                            <strong>Word文档</strong>
+                                            <small>适合报告打印</small>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="export-section" id="coordinate-export-options-section" style="display: none;">
+                                <h4>内容选项</h4>
+                                <div class="content-options" id="coordinate-export-options"></div>
+                            </div>
+                            <div class="export-section">
+                                <h4>文件设置</h4>
+                                <div class="file-settings">
+                                    <div class="param-row">
+                                        <label class="param-label">文件名称</label>
+                                        <input type="text" id="coordinate-export-filename" class="param-input" placeholder="例如：coordinate_export">
+                                    </div>
+                                    <div class="param-row" id="coordinate-export-decimal-row">
+                                        <label class="param-label">数值小数位</label>
+                                        <input type="number" id="coordinate-export-decimals" class="param-input" min="0" max="10" value="3">
+                                    </div>
+                                    <div class="param-row decimal-groups-row" id="coordinate-export-decimal-groups" style="display: none;">
+                                        <label class="param-label">分类小数位</label>
+                                        <div class="decimal-settings-grid" id="coordinate-export-decimal-grid"></div>
+                                    </div>
+                                    <p class="param-hint" id="coordinate-export-decimal-hint" style="display: none;">可针对B/L、H、XYZ、平面坐标等分别设置小数位</p>
+                                    <label class="inline-label"><input type="checkbox" id="coordinate-export-include-header" checked> 包含表头</label>
+                                    <label class="inline-label"><input type="checkbox" id="coordinate-export-include-timestamp" checked> 文件名附加时间戳</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="tool-btn" data-close-modal="coordinateExportModal">取消</button>
+                            <button class="tool-btn primary" id="coordinate-export-confirm">确认导出</button>
                         </div>
                     </div>
                 </div>
