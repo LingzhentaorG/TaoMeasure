@@ -10,6 +10,10 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
 
+## 演示视频 | Demo Video
+
+[![TaoMeasure Demo Video](https://img.shields.io/badge/YouTube-演示视频-red.svg)](https://youtu.be/KvvNaqw_Ysc)
+
 ## 项目简介 | Project Introduction
 
 TaoMeasure 是一套面向测绘与道路工程场景的专业工具集，涵盖 GPS 高程异常换算、平面坐标正反算、多参数转换、道路曲线设计与 DXF 导出等核心功能模块。项目采用前后端分离架构，基于 Flask 后端与原生前端技术，提供直观易用的 Web 界面和 RESTful API，便于部署与二次开发。
