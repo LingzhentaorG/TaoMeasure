@@ -324,25 +324,23 @@ class CoordinateUniversalApp {
     ensureInitialRows() {
         if (this.elements.commonBody && !this.elements.commonBody.children.length) {
             this.addCommonRow({});
-            this.addCommonRow({});
         }
         if (this.elements.pointsBody && !this.elements.pointsBody.children.length) {
-            this.addPointRow({});
             this.addPointRow({});
         }
     }
 
-
-
     clearCommonPoints() {
         if (!this.elements.commonBody) return;
         this.elements.commonBody.innerHTML = "";
+        // 清空后添加一个空行
         this.addCommonRow({});
     }
 
     clearPoints() {
         if (!this.elements.pointsBody) return;
         this.elements.pointsBody.innerHTML = "";
+        // 清空后添加一个空行
         this.addPointRow({});
     }
 
@@ -547,21 +545,31 @@ class CoordinateUniversalApp {
 
     populateCommonPoints(rows) {
         if (!this.elements.commonBody) return;
+        // 清空表格
         this.elements.commonBody.innerHTML = "";
+        
+        // 如果没有数据，添加一个空行
         if (!rows || !rows.length) {
-            this.addCommonRow();
+            this.addCommonRow({});
             return;
         }
+        
+        // 填充数据
         rows.forEach((row) => this.addCommonRow(row));
     }
 
     populatePoints(rows) {
         if (!this.elements.pointsBody) return;
+        // 清空表格
         this.elements.pointsBody.innerHTML = "";
+        
+        // 如果没有数据，添加一个空行
         if (!rows || !rows.length) {
-            this.addPointRow();
+            this.addPointRow({});
             return;
         }
+        
+        // 填充数据
         rows.forEach((row) => this.addPointRow(row));
     }
 
@@ -771,8 +779,12 @@ class CoordinateUniversalApp {
                     const rows = this.parseCommonImport(text);
                     count = Array.isArray(rows) ? rows.length : 0;
                     
-                    // 检查表格是否已有数据
-                    const hasExistingData = this.elements.commonBody && this.elements.commonBody.children.length > 0;
+                    // 检查表格是否已有有效数据（非空行）
+                    const hasExistingData = this.elements.commonBody && 
+                        Array.from(this.elements.commonBody.children).some(row => {
+                            const nameInput = row.querySelector('input[data-section="name"]');
+                            return nameInput && nameInput.value.trim();
+                        });
                     
                     if (hasExistingData) {
                         // 合并数据
@@ -787,8 +799,12 @@ class CoordinateUniversalApp {
                     const rows = this.parsePointImport(text);
                     count = Array.isArray(rows) ? rows.length : 0;
                     
-                    // 检查表格是否已有数据
-                    const hasExistingData = this.elements.pointsBody && this.elements.pointsBody.children.length > 0;
+                    // 检查表格是否已有有效数据（非空行）
+                    const hasExistingData = this.elements.pointsBody && 
+                        Array.from(this.elements.pointsBody.children).some(row => {
+                            const nameInput = row.querySelector('input[data-field="name"]');
+                            return nameInput && nameInput.value.trim();
+                        });
                     
                     if (hasExistingData) {
                         // 合并数据
@@ -1599,14 +1615,22 @@ class CoordinateUniversalApp {
             const label = UNIVERSAL_IMPORT_LABELS[this.fieldMappingData.targetType] || "数据";
             const countText = typeof result.count === "number" && result.count > 0 ? `（${result.count} 条）` : "";
             
-            // 检查表格是否已有数据，以显示不同的成功消息
+            // 检查表格是否已有有效数据（非空行），以显示不同的成功消息
             let hasExistingData = false;
             switch (this.fieldMappingData.targetType) {
                 case "common":
-                    hasExistingData = this.elements.commonBody && this.elements.commonBody.children.length > 0;
+                    hasExistingData = this.elements.commonBody && 
+                        Array.from(this.elements.commonBody.children).some(row => {
+                            const nameInput = row.querySelector('input[data-section="name"]');
+                            return nameInput && nameInput.value.trim();
+                        });
                     break;
                 case "points":
-                    hasExistingData = this.elements.pointsBody && this.elements.pointsBody.children.length > 0;
+                    hasExistingData = this.elements.pointsBody && 
+                        Array.from(this.elements.pointsBody.children).some(row => {
+                            const nameInput = row.querySelector('input[data-field="name"]');
+                            return nameInput && nameInput.value.trim();
+                        });
                     break;
                 case "results":
                     hasExistingData = this.elements.resultsBody && this.elements.resultsBody.children.length > 0;
@@ -1670,19 +1694,27 @@ class CoordinateUniversalApp {
             
             // 应用数据到表格
             if (points.length > 0) {
-                // 检查表格是否已有数据
-                let hasExistingData = false;
-                switch (targetType) {
-                    case "common":
-                        hasExistingData = this.elements.commonBody && this.elements.commonBody.children.length > 0;
-                        break;
-                    case "points":
-                        hasExistingData = this.elements.pointsBody && this.elements.pointsBody.children.length > 0;
-                        break;
-                    case "results":
-                        hasExistingData = this.elements.resultsBody && this.elements.resultsBody.children.length > 0;
-                        break;
-                }
+                // 检查表格是否已有有效数据（非空行）
+            let hasExistingData = false;
+            switch (targetType) {
+                case "common":
+                    hasExistingData = this.elements.commonBody && 
+                        Array.from(this.elements.commonBody.children).some(row => {
+                            const nameInput = row.querySelector('input[data-section="name"]');
+                            return nameInput && nameInput.value.trim();
+                        });
+                    break;
+                case "points":
+                    hasExistingData = this.elements.pointsBody && 
+                        Array.from(this.elements.pointsBody.children).some(row => {
+                            const nameInput = row.querySelector('input[data-field="name"]');
+                            return nameInput && nameInput.value.trim();
+                        });
+                    break;
+                case "results":
+                    hasExistingData = this.elements.resultsBody && this.elements.resultsBody.children.length > 0;
+                    break;
+            }
                 
                 // 如果有现有数据，自动合并数据（相同点号更新，不同点号追加）
                 if (hasExistingData) {
@@ -1820,9 +1852,18 @@ class CoordinateUniversalApp {
             const nameInput = row.querySelector('input[data-section="name"]');
             if (nameInput) {
                 const pointName = nameInput.value.trim();
+                // 只记录有名称的点，忽略空行
                 if (pointName) {
                     existingPointMap.set(pointName, { row, index });
                 }
+            }
+        });
+
+        // 如果有空行，先移除它们
+        rows.forEach((row) => {
+            const nameInput = row.querySelector('input[data-section="name"]');
+            if (nameInput && !nameInput.value.trim()) {
+                row.remove();
             }
         });
 
@@ -1853,9 +1894,18 @@ class CoordinateUniversalApp {
             const nameInput = row.querySelector('input[data-field="name"]');
             if (nameInput) {
                 const pointName = nameInput.value.trim();
+                // 只记录有名称的点，忽略空行
                 if (pointName) {
                     existingPointMap.set(pointName, { row, index });
                 }
+            }
+        });
+
+        // 如果有空行，先移除它们
+        rows.forEach((row) => {
+            const nameInput = row.querySelector('input[data-field="name"]');
+            if (nameInput && !nameInput.value.trim()) {
+                row.remove();
             }
         });
 
