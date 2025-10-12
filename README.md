@@ -334,7 +334,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 联系方式 | Contact
 
 - 项目维护者 | Project Maintainer: Lingzhentaor
-- 邮箱 | Email: your-email@example.com
 - 项目主页 | Project Homepage: https://github.com/your-username/TaoMeasure
 
 ## 致谢 | Acknowledgments
